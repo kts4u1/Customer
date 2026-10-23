@@ -220,12 +220,22 @@ def _rule(exact=(), contains=(), exclude=()):
 # 순서가 우선순위입니다 (앞의 필드가 먼저 컬럼을 차지).
 FSN_FIELDS = [
     ("hospital", _rule(
-        exact=["병원명", "병원", "병원 이름", "고객명", "고객사명", "고객사", "고객", "의료기관명", "의료기관",
+        exact=["국문병원명", "병원명(국문)", "국문 병원명", "병원명 국문", "고객명(국문)", "국문고객명", "고객명 국문",
+               "병원명", "병원", "병원 이름", "고객명", "고객사명", "고객사", "고객", "의료기관명", "의료기관",
                "기관명", "기관", "거래처명", "거래처", "Account Name", "Account", "Customer Name",
                "Customer", "Hospital", "Hospital Name", "Site Name", "Site"],
         contains=["병원", "고객사", "고객명", "기관명", "거래처", "account", "customer", "hospital"],
         exclude=["담당", "코드", "code", "번호", "주소", "address", "연락", "전화", "phone", "안내", "notice",
-                 "유형", "type", "id", "수량", "개수", "구분", "종별", "등급"])),
+                 "유형", "type", "id", "수량", "개수", "구분", "종별", "등급", "영문", "english"])),
+    # 병원명 칸이 비었을 때 쓸 두 번째 국문 이름 (예: 국문병원명이 비면 고객명(국문))
+    ("hospital2", _rule(
+        exact=["고객명(국문)", "국문고객명", "고객명 국문", "국문병원명", "병원명(국문)", "고객명", "고객사명"],
+        contains=["국문"], exclude=["영문", "코드", "주소"])),
+    # 국문 이름이 모두 비었을 때 마지막 대안
+    ("hospital_en", _rule(
+        exact=["영문병원명", "영문 병원명", "병원명(영문)", "고객명(영문)", "영문고객명", "Account Name",
+               "Customer Name", "Hospital Name"],
+        contains=["영문"], exclude=["코드", "주소"])),
     ("method", _rule(
         exact=["전달방법", "전달 방식", "전달수단", "전달경로", "발송방법", "발송방식", "송부방법", "송부방식",
                "통보방법", "방법", "Delivery Method", "Method", "Delivery Type"],
@@ -275,7 +285,7 @@ FSN_FIELDS = [
         contains=["sales", "영업", "세일즈"])),
     ("sn", _rule(
         exact=["SN", "S/N", "Serial", "Serial No", "Serial Number", "시리얼", "시리얼번호", "장비번호", "Equipment No"],
-        contains=["serial", "시리얼"])),
+        contains=["serial", "시리얼", "일련번호"])),
     ("system", _rule(
         exact=["System Code Description", "System", "System Code", "장비", "장비명", "모델", "모델명", "Model",
                "Product", "제품", "제품명", "Equipment", "장비모델", "시스템"],
@@ -438,7 +448,7 @@ def classify_status(v):
     s = norm_header(v)
     if not s:
         return ""
-    if any(w in s for w in (norm_header(x) for x in EXCLUDE_STATUS)):
+    if any((w == s) if len(w) <= 3 else (w in s) for w in (norm_header(x) for x in EXCLUDE_STATUS)):
         return "excluded"
     if s in TODO_EXACT:
         return "todo"
@@ -493,7 +503,25 @@ def _truthy_mark(v) -> bool:
     return bool(s) and s not in TODO_EXACT and not s.startswith("미")
 
 
-def parse_fsn(path: Path, overrides=None) -> dict:
+HOSP_FIELDS = ("hospital", "hospital2", "hospital_en")
+PLACEHOLDER = {"", "-", "--", "n", "na", "x", "0", "?", "없음", "미정", "tbd"}
+# 이 단어가 들어간 시트는 읽지 않음 (config.json "skip_sheets"로 바꿀 수 있음)
+SKIP_SHEET_WORDS = ["삭제", "closed"]
+
+
+def row_hospital(row, m) -> str:
+    """국문병원명 → 고객명(국문) → 영문병원명 순으로 처음 채워진 값"""
+    for f in HOSP_FIELDS:
+        c = m.get(f)
+        if c is None or c >= len(row):
+            continue
+        v = clean_text(row[c])
+        if norm_header(v) not in PLACEHOLDER:
+            return v
+    return ""
+
+
+def parse_fsn(path: Path, overrides=None, skip_sheets=None) -> dict:
     import openpyxl
     res = {"ok": False, "error": "", "rows": [], "sheets": [], "status_values": [], "method_values": [],
            "excluded": 0, "skipped": 0, "unknown_status": 0, "warnings": [], "fsn_from_sheet": False,
@@ -506,18 +534,22 @@ def parse_fsn(path: Path, overrides=None) -> dict:
         return res
 
     candidates = []
+    skip_words = [norm_header(w) for w in (skip_sheets if skip_sheets is not None else SKIP_SHEET_WORDS)]
     for ws in wb.worksheets:
         info = {"name": ws.title, "used": False, "reason": "", "rows": 0}
         res["sheets"].append(info)
         if getattr(ws, "sheet_state", "visible") != "visible":
             info["reason"] = "숨김 시트"
             continue
+        if any(w and w in norm_header(ws.title) for w in skip_words):
+            info["reason"] = "시트 이름으로 제외 (삭제예정/Closed 등)"
+            continue
         try:
             grid_all, grid_vert = read_sheet_grids(ws)
         except Exception as e:
             info["reason"] = f"읽기 실패: {e}"
             continue
-        hdr = detect_header(grid_all, FSN_FIELDS, required=[("hospital",)], overrides=overrides)
+        hdr = detect_header(grid_all, FSN_FIELDS, required=[HOSP_FIELDS], overrides=overrides)
         if not hdr:
             info["reason"] = "병원 컬럼을 찾지 못함"
             continue
@@ -527,8 +559,7 @@ def parse_fsn(path: Path, overrides=None) -> dict:
             info["header_row"] = hdr["header_row"] + 1
             info["mapping"] = {f: hdr["headers"][c][1] for f, c in m.items()}
             continue
-        data_rows = sum(1 for row in grid_vert[hdr["header_row"] + 1:]
-                        if clean_text(row[m["hospital"]] if m["hospital"] < len(row) else None))
+        data_rows = sum(1 for row in grid_vert[hdr["header_row"] + 1:] if row_hospital(row, m))
         info.update({"header_row": hdr["header_row"] + 1, "score": hdr["score"], "data_rows": data_rows,
                      "mapping": {f: hdr["headers"][c][1] for f, c in m.items()},
                      "wide": {hdr["headers"][c][1]: v for c, v in hdr["wide"].items()}})
@@ -541,10 +572,13 @@ def parse_fsn(path: Path, overrides=None) -> dict:
     best = max(candidates, key=lambda x: (x[2]["score"], x[1]["data_rows"]))
     best_fields = set(best[2]["mapping"].keys())
     # 같은 구조(핵심 컬럼이 같은) 시트만 합침 → 요약/피벗 시트는 제외
-    core = best_fields & {"hospital", "status", "method", "date", "bu", "cr", "fsn"}
+    core = best_fields & {"status", "method", "date", "bu", "cr", "fsn"}
     chosen = [c for c in candidates
               if core <= set(c[2]["mapping"].keys()) and (bool(c[2]["wide"]) == bool(best[2]["wide"]))]
-    if len(chosen) > 1 and "fsn" not in best_fields:
+    # 시트가 여러 개일 때: BU 컬럼이 없으면 시트 이름 = BU (예: MR / CT / IGT DXR US HPM 시트)
+    #                     BU는 있고 FSN/C&R 컬럼이 없으면 시트 이름 = FSN
+    bu_from_sheet = len(chosen) > 1 and "bu" not in best_fields
+    if len(chosen) > 1 and not bu_from_sheet and not ({"fsn", "cr"} & best_fields):
         res["fsn_from_sheet"] = True
 
     status_counter, method_counter = Counter(), Counter()
@@ -562,7 +596,7 @@ def parse_fsn(path: Path, overrides=None) -> dict:
 
         for ri in range(hdr["header_row"] + 1, len(grid)):
             row = grid[ri]
-            hosp = clean_text(g(row, "hospital"))
+            hosp = row_hospital(row, m)
             if not hosp:
                 if any(clean_text(v) for v in row):
                     res["skipped"] += 1
@@ -570,7 +604,7 @@ def parse_fsn(path: Path, overrides=None) -> dict:
             if norm_header(hosp) in SKIP_HOSPITAL_WORDS or norm_header(hosp).startswith("합계"):
                 continue
             # 반복 헤더 행 건너뛰기
-            if norm_header(hosp) == norm_header(hdr["headers"][m["hospital"]][1]):
+            if norm_header(hosp) in {norm_header(hdr["headers"][m[f]][1]) for f in HOSP_FIELDS if f in m}:
                 continue
 
             status_raw = g(row, "status")
@@ -616,7 +650,9 @@ def parse_fsn(path: Path, overrides=None) -> dict:
             rec = {
                 "k": "", "h": hosp,
                 "site": clean_text(g(row, "site")),
-                "bu": norm_bu(g(row, "bu")),
+                "bu": norm_bu(g(row, "bu")) or (ws.title.strip() if bu_from_sheet else ""),
+                "hen": clean_text(g(row, "hospital_en")) if row_hospital(row, m) != clean_text(
+                    g(row, "hospital_en")) else "",
                 "cr": clean_text(g(row, "cr")),
                 "fsn": fsn,
                 "ft": clean_text(g(row, "fsn_title")),
@@ -660,6 +696,9 @@ def parse_fsn(path: Path, overrides=None) -> dict:
                                "(데이터 정보 탭의 '전달여부 값' 표 참고)")
     if res["fsn_from_sheet"]:
         res["warnings"].append("FSN 번호 컬럼이 없어 시트 이름을 FSN 구분으로 사용했습니다.")
+    if bu_from_sheet:
+        res["warnings"].append("BU 컬럼이 없어 시트 이름(" + ", ".join(c[1]["name"] for c in chosen) +
+                               ")을 BU로 사용했습니다.")
     res["ok"] = True
     log(f"FSN 파싱: {len(res['rows'])}행, 시트={[c[1]['name'] for c in chosen]}, 매핑={res['fields']}")
     return res
@@ -776,19 +815,23 @@ def build_dashboard_data(fsn_info: dict, fco_infos: list, today: dt.date) -> dic
         if r["sn"]:
             sn_to_key.setdefault(sn_key(r["sn"]), r["k"])
     linked_by_sn = 0
+    fco_keys = {r["k"] for r in fco_rows}
     for r in fsn_rows:
         k = ""
         if r["sn"] and sn_key(r["sn"]) in sn_to_key:
             k = sn_to_key[sn_key(r["sn"])]
             if k != hospital_key(r["h"]):
                 linked_by_sn += 1
+        if not k and hospital_key(r["h"]) not in fco_keys and r.get("hen") and hospital_key(r["hen"]) in fco_keys:
+            k = hospital_key(r["hen"])  # FCO Account가 영문 이름인 경우
         r["k"] = k or hospital_key(r["h"]) or ("fsn:" + r["h"])
 
     hospitals = {}
     for r in fsn_rows:
         h = hospitals.setdefault(r["k"], {"name": r["h"], "pp": [], "names": []})
-        if r["h"] not in h["names"]:
-            h["names"].append(r["h"])
+        for nm in (r["h"], r.get("hen")):
+            if nm and nm not in h["names"]:
+                h["names"].append(nm)
         pp = split_people(r["fse"]) + split_people(r["sales"])
         r["pp"] = pp
         for p in pp:
@@ -804,7 +847,6 @@ def build_dashboard_data(fsn_info: dict, fco_infos: list, today: dt.date) -> dic
             if p not in h["pp"]:
                 h["pp"].append(p)
 
-    fco_keys = {r["k"] for r in fco_rows}
     matched = len({r["k"] for r in fsn_rows} & fco_keys)
 
     data = {
@@ -1033,6 +1075,17 @@ return ['please wait', 'loading the workbook', '잠시 기다려', '통합 문�
   .some(w => t.includes(w));
 """
 
+FETCH_JS = r"""
+const done = arguments[arguments.length - 1];
+fetch(arguments[0], {credentials: 'include', redirect: 'follow'}).then(async r => {
+  const buf = new Uint8Array(await r.arrayBuffer());
+  let bin = '';
+  for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
+  done({ok: r.ok, status: r.status, type: r.headers.get('content-type') || '',
+        cd: r.headers.get('content-disposition') || '', url: r.url, size: buf.length, b64: btoa(bin)});
+}).catch(e => done({ok: false, error: String(e)}));
+"""
+
 FILE_TEXTS = ["File", "파일"]
 COPY_TEXTS = ["Create a Copy", "Save As", "Save a Copy", "복사본 만들기", "다른 이름으로 저장", "복사본 저장"]
 DOWNLOAD_TEXTS = ["Download a Copy", "복사본 다운로드", "Download a copy to your device", "Download"]
@@ -1062,6 +1115,8 @@ class EdgeDownloader:
         opts.add_argument("--start-maximized")
         opts.add_experimental_option("prefs", {
             "download.default_directory": str(DOWNLOAD_DIR),
+            "download.open_pdf_in_system_reader": False,
+            "download.extensions_to_open": "",
             "download.prompt_for_download": False,
             "download.directory_upgrade": True,
             "safebrowsing.enabled": True,
@@ -1092,6 +1147,13 @@ class EdgeDownloader:
                     pass
             self.driver = webdriver.Edge(options=opts, service=service2)
         self.driver.set_page_load_timeout(45)
+        # 다운로드를 묻지 않고 바로 저장 (Edge의 '이 파일을 열까요?' 창 방지)
+        for cmd in ("Browser.setDownloadBehavior", "Page.setDownloadBehavior"):
+            try:
+                self.driver.execute_cdp_cmd(cmd, {"behavior": "allow", "downloadPath": str(DOWNLOAD_DIR)})
+                break
+            except Exception:
+                log(f"{cmd} 실패")
         try:
             self.driver.command_executor.set_timeout(20)
         except Exception:
@@ -1269,11 +1331,62 @@ class EdgeDownloader:
             self._click(el)
         return True
 
+    def _fetch_in_page(self, url: str, dest: Path, label: str) -> Path | None:
+        """로그인된 Edge 페이지 안에서 fetch로 파일 내용을 직접 가져옴.
+        브라우저 다운로드를 쓰지 않으므로 '이 파일을 열까요?' 창이 뜨지 않습니다."""
+        from urllib.parse import urlparse, unquote
+        self.report(f"{label}: 로그인 확인 중...")
+        self._get(url)
+        self._wait_login(label)
+        host = urlparse(url).netloc.lower()
+        end = time.time() + 60
+        while time.time() < end and not self.stop_event.is_set():
+            if urlparse(self._current_url()).netloc.lower() == host:
+                break
+            time.sleep(1)
+        self.report(f"{label}: 파일 받는 중...")
+        try:
+            self.driver.switch_to.default_content()
+        except Exception:
+            pass
+        try:
+            self.driver.set_script_timeout(240)
+            res = self.driver.execute_async_script(FETCH_JS, add_download_param(url))
+        except Exception as e:
+            log(f"{label}: fetch 실패 {type(e).__name__}: {str(e)[:200]}")
+            return None
+        if not isinstance(res, dict) or not res.get("b64"):
+            log(f"{label}: fetch 결과 없음 {str(res)[:300] if not isinstance(res, dict) else {k: v for k, v in res.items() if k != 'b64'}}")
+            return None
+        import base64
+        data = base64.b64decode(res["b64"])
+        info = {k: v for k, v in res.items() if k != "b64"}
+        if not data.startswith(b"PK"):
+            log(f"{label}: fetch 결과가 엑셀이 아님 {info}")
+            return None
+        name = ""
+        cd = res.get("cd") or ""
+        m = re.search(r"filename\*=(?:UTF-8|utf-8)''([^;]+)", cd) or re.search(r'filename="?([^";]+)"?', cd)
+        if m:
+            name = unquote(m.group(1)).strip()
+        name = re.sub(r'[\\/:*?"<>|]+', "_", name) or "download.xlsx"
+        if not name.lower().endswith(EXCEL_EXTS):
+            name += ".xlsx"
+        DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
+        tmp = DOWNLOAD_DIR / name
+        tmp.write_bytes(data)
+        log(f"{label}: fetch 성공 {len(data):,} bytes, {name}")
+        return store_download(tmp, dest)
+
     def download(self, url: str, dest: Path, name_ok, label: str, allow_manual=True) -> Path | None:
         if self.driver is None:
             self.start()
         since = time.time() - 2
-        # 1) 공유 링크 + download=1 → 바로 다운로드
+        # 0) 페이지 안에서 직접 받기 (다운로드 창 없음)
+        got = self._fetch_in_page(url, dest, label)
+        if got:
+            return got
+        # 1) 공유 링크 + download=1 → 브라우저 다운로드
         self.report(f"{label}: 파일 받는 중 (바로 받기)...")
         self._get(add_download_param(url))
         self._wait_login(label)
@@ -1435,9 +1548,13 @@ def run_pipeline(force: bool, manual_fsn: Path | None, report, step, stop_event,
     if not fco_ok:
         step(1, "warn", "FCO 파일 없음 (FCO 없이 진행)")
     elif any(p[2] for p in fco_ok) or fco_missing:
-        txt = " · ".join(f"{p[0]} {'(이전 파일)' if p[2] else ''}".strip() for p in fco_ok)
+        def _d(path):
+            return dt.datetime.fromtimestamp(path.stat().st_mtime).strftime("%m/%d")
+        txt = " · ".join(f"{p[0]} {_d(p[1]) if p[2] else '오늘'}" for p in fco_ok)
         if fco_missing:
             txt += f"  ({', '.join(fco_missing)} 없음)"
+        if not any(fco_urls.values()):
+            txt += "\n→ FCO 주소 미설정: FCO 프로그램이 받아 둔 파일 사용"
         step(1, "warn", txt)
     else:
         step(1, "ok", " · ".join(p[0] for p in fco_ok))
@@ -1450,7 +1567,8 @@ def run_pipeline(force: bool, manual_fsn: Path | None, report, step, stop_event,
     fsn_info = None
     if fsn_path:
         meta = read_meta(fsn_path)
-        fsn_info = {"parse": parse_fsn(fsn_path, col_overrides),
+        report("엑셀 데이터를 읽는 중... (파일이 크면 1~2분 걸릴 수 있습니다)")
+        fsn_info = {"parse": parse_fsn(fsn_path, col_overrides, cfg.get("skip_sheets")),
                     "file": file_info(fsn_path, meta.get("original_name", ""), fsn_stale, fsn_origin)}
     fco_infos = []
     for src, path, stale, origin, _ in fco_plan:
@@ -1542,7 +1660,7 @@ def run_gui():
         ic.pack(side="left")
         tk.Label(row, text=f"{i + 1}. {name}", font=f_body, bg="#ffffff", fg="#0b0b0b", width=26,
                  anchor="w").pack(side="left")
-        st = tk.Label(row, text="대기", font=f_small, bg="#ffffff", fg="#52514e", anchor="w")
+        st = tk.Label(row, text="대기", font=f_small, bg="#ffffff", fg="#52514e", anchor="w", justify="left")
         st.pack(side="left", fill="x", expand=True)
         step_icons.append(ic)
         step_texts.append(st)

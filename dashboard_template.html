@@ -462,7 +462,7 @@ function qOK(r, kind) {
   if (!S.q) return true;
   const q = S.q.toLowerCase();
   const fields = kind === 'fsn'
-    ? [r.h, r.site, r.sn, r.fsn, r.ft, r.cr, r.fco, r.sys]
+    ? [r.h, r.hen, r.site, r.sn, r.fsn, r.ft, r.cr, r.fco, r.sys]
     : [r.h, r.site, r.sn, r.fco, r.t, r.sys, r.wo, r.case];
   fields.push(hname(r.k));
   return fields.some(v => v && String(v).toLowerCase().indexOf(q) >= 0);
@@ -965,7 +965,7 @@ function viewHosp() {
 
 /* ---------- 데이터 정보 ---------- */
 const FIELD_KO = {
-  hospital: '병원', site: 'Site', bu: 'BU', cr: 'C&R', fsn: 'FSN 번호', fsn_title: 'FSN 제목', fco: '관련 FCO',
+  hospital: '병원 (국문)', hospital2: '병원 (국문, 대안)', hospital_en: '병원 (영문, 마지막 대안)', site: 'Site', bu: 'BU', cr: 'C&R', fsn: 'FSN 번호', fsn_title: 'FSN 제목', fco: '관련 FCO',
   method: '전달방법', status: '전달여부', date: '전달일', reply: '회신', fse: 'FSE', sales: '영업', sn: 'S/N',
   system: '장비', region: '지역', remark: '비고',
   due: 'Due Date', title: 'FCO Title', sysdesc: 'System Code Description', syscode: 'System Code', account: 'Account',

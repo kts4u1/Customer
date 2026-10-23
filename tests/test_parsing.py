@@ -137,6 +137,45 @@ def test_sheet_per_fsn():
         assert len(r["rows"]) == 3 and sum(x["s"] for x in r["rows"]) == 1
 
 
+def test_real_layout_korean_names():
+    """실제 파일 화면(2026-10-23 캡처)과 비슷한 구조:
+    시트 MR/CT/IGT…(BU 컬럼 없음), 영문병원명 + 국문병원명 + 고객명(국문), (삭제예정)/Closed 시트"""
+    import openpyxl
+    head = ["C&R#", "장비 ID", "장비코드(6NC/12NC)", "장비명", "일련번호(S/N)", "고객코드(향후 업데이트)",
+            "영문병원명(업데이트예정)", "국문병원명", "고객명(국문)", "전달방법", "최초 발송일", "지역", "비고",
+            "수신확인서 (Y/N/NA)"]
+    with tempfile.TemporaryDirectory() as d:
+        path = Path(d) / "real.xlsx"
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "IB_raw data"
+        ws.append(["장비 ID", "영문병원명", "국문병원명", "장비명"])
+        ws.append(["1", "A HOSP", "가람병원", "Ingenia"])
+        for title in ("MR", "CT", "(삭제예정)SMAX자료", "Closed"):
+            w = wb.create_sheet(title)
+            w.append(head)
+            w.append(["2026-PD-MR-004", "98162875", "782107", "Ingenia", "62030", "0", "DONGKOOK UNIV",
+                      "동국대학교병원", "", "등기", dt.date(2026, 9, 1), "Central", "", "Y"])
+            w.append(["2026-PD-MR-004", "98747245", "782107", "Ingenia", "62039", "0", "-",
+                      "-", "혜민병원", "직접전달", None, "Central", "", "N"])
+            w.append(["2026-PD-MR-018", "100342128", "782107", "Ingenia", "62073", "0", "KOREA UNIV",
+                      "", "", "", None, "JR", "", "NA"])
+        wb.save(path)
+        r = main.parse_fsn(path)
+        assert r["ok"], r["error"]
+        assert r["fields"]["hospital"] == "국문병원명", r["fields"]
+        assert r["fields"]["hospital2"] == "고객명(국문)", r["fields"]
+        assert r["fields"]["hospital_en"] == "영문병원명(업데이트예정)", r["fields"]
+        assert r["fields"]["sn"] == "일련번호(S/N)" and r["fields"]["cr"] == "C&R#", r["fields"]
+        used = [s["name"] for s in r["sheets"] if s["used"]]
+        assert used == ["MR", "CT"], used
+        names = [x["h"] for x in r["rows"] if x["bu"] == "MR"]
+        assert names == ["동국대학교병원", "혜민병원", "KOREA UNIV"], names
+        assert {x["bu"] for x in r["rows"]} == {"MR", "CT"}
+        # 전달여부 컬럼이 없고 발송일 컬럼이 있으면 → 발송일이 있어야 완료
+        assert [x["s"] for x in r["rows"] if x["bu"] == "MR"] == [1, 0, 0]
+
+
 def test_pipeline_manual_file():
     """파일 직접 선택 경로: 다운로드 없이 대시보드 생성"""
     with tempfile.TemporaryDirectory() as d:
