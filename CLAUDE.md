@@ -55,7 +55,9 @@ HTML 대시보드(`~/FSN_Dashboard/FSN_FCO_Dashboard.html`)를 만들고 Edge로
 ### FCO 파일
 - 기존 FCO 프로그램과 동일: MR / XR / CT/AMI, 컬럼 FCO, Due Date, FCO Title, …, Account, Site, FSE, Action Plan, Status, 고객안내문 관련 …
 - `Status`가 Closed인 행 제외. 구간: Due Date가 오늘+6개월 미만 빨강, +1년 미만 노랑, 그 외 녹색.
-- FCO SharePoint URL은 아직 모릅니다(`FCO_SOURCES`의 url이 빈칸). 빈칸이면 기존 FCO 프로그램 캐시 `~/FCO_Action_Plan/{MR_FCO_Action_Plan,XR_Open_FCO_list,CT_AMI_FCO_Action_Plan}.xlsx`를 읽기 전용으로 사용합니다. 사용자에게 기존 FCO `main.py`의 `SOURCES` URL을 받으면 채우세요.
+- FCO URL 3개 입력 완료(2026-10-23, `FCO_SOURCES`). 형태: `share.philips.com/:x:/r/sites/KRHSFCOstatus/_layouts/15/Doc.aspx?sourcedoc={GUID}&file=…`
+  → `add_download_param`이 `…/sites/KRHSFCOstatus/_layouts/15/download.aspx?UniqueId=GUID`로 바꿔서 받음(Doc.aspx에 download=1은 안 됨).
+  받기 실패 시 오늘 받은 파일 → 기존 FCO 프로그램 캐시 `~/FCO_Action_Plan/…xlsx` → 이전 파일 순으로 사용.
 - 병원 연결: 병원명 정규화(`hospital_key`: 공백·(재)·의료법인 등 제거) + 장비 S/N이 같으면 FCO Account 쪽 병원으로 묶음.
 
 ## 자동 다운로드 (EdgeDownloader)
@@ -82,4 +84,4 @@ HTML 대시보드(`~/FSN_Dashboard/FSN_FCO_Dashboard.html`)를 만들고 Edge로
 - 검증: 샘플 2종(일반 표, 두 줄 헤더+병합+방법 칸 분리) 파싱, 대시보드 5개 탭 렌더링(데스크톱/모바일/다크), 필터·클릭·CSV, Tkinter 진행 창(캐시 사용/다운로드 실패), 리눅스 PyInstaller 빌드 실행.
 - 미검증: 실제 회사 PC에서 Edge 자동 다운로드, 실제 고객안내문 파일의 컬럼 구조, Windows exe 빌드.
 - FCO 단계의 "!" 표시는 실패가 아니라 "FCO 주소 미설정 → FCO 프로그램이 받아 둔 이전 날짜 파일 사용"이라는 뜻(진행 창에 이유 표시하도록 수정).
-- 열린 항목: FCO URL 3개(사용자가 '넣었다'고 했으나 메시지에 주소가 없었음 → 다시 요청함), 실제 파일 기준 컬럼/판정 규칙 조정, 사용자 피드백 반영.
+- 열린 항목: 실제 파일 기준 컬럼/판정 규칙 조정, 사용자 피드백 반영.

@@ -177,6 +177,18 @@ def test_real_layout_korean_names():
         assert [x["s"] for x in r["rows"] if x["bu"] == "MR"] == [1, 1, 0]
 
 
+def test_download_urls():
+    fco = main.FCO_SOURCES["MR"]["url"]
+    assert main.add_download_param(fco) == (
+        "https://share.philips.com/sites/KRHSFCOstatus/_layouts/15/download.aspx"
+        "?UniqueId=41877D54-C06C-43EA-A61A-D8EE1F661BF5"), main.add_download_param(fco)
+    assert main.add_download_param(main.FCO_SOURCES["CT/AMI"]["url"]).endswith(
+        "UniqueId=FAACFA92-78CB-4165-BEEB-C5346C578244")
+    fsn = main.FSN_SOURCE["url"]
+    assert main.add_download_param(fsn) == fsn + "&download=1"
+    assert all(v["url"].startswith("https://") for v in main.FCO_SOURCES.values())
+
+
 def test_pipeline_manual_file():
     """파일 직접 선택 경로: 다운로드 없이 대시보드 생성"""
     with tempfile.TemporaryDirectory() as d:
@@ -192,6 +204,9 @@ def test_pipeline_manual_file():
             main.DASHBOARD_PATH = main.APP_DIR / "dash.html"
             main.CONFIG_PATH = main.APP_DIR / "config.json"
             main.FCO_APP_DIR = tmp / "fco_app"
+            saved_urls = {k: v["url"] for k, v in main.FCO_SOURCES.items()}
+            for v in main.FCO_SOURCES.values():
+                v["url"] = ""  # 테스트에서는 Edge로 받지 않음
             main.FCO_APP_DIR.mkdir()
             (tmp / "MR FCO Action Plan.xlsx").replace(main.FCO_APP_DIR / "MR_FCO_Action_Plan.xlsx")
             steps = []
@@ -201,6 +216,8 @@ def test_pipeline_manual_file():
             assert (0, "run") in steps and (2, "ok") in steps, steps
             assert (main.DATA_DIR / main.FSN_SOURCE["cache"]).exists()
         finally:
+            for k, v in main.FCO_SOURCES.items():
+                v["url"] = saved_urls.get(k, v["url"]) if "saved_urls" in dir() else v["url"]
             (main.APP_DIR, main.DATA_DIR, main.DOWNLOAD_DIR, main.LOG_PATH, main.DASHBOARD_PATH,
              main.CONFIG_PATH, main.FCO_APP_DIR) = old
 

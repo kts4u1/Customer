@@ -55,9 +55,18 @@ FSN_SOURCE = {
 # url이 비어 있으면 기존 FCO 프로그램(~/FCO_Action_Plan)이 받아 둔 파일을 사용합니다.
 # 주소는 config.json의 "fco_urls"로도 넣을 수 있습니다.
 FCO_SOURCES = OrderedDict([
-    ("MR", {"url": "", "cache": "MR_FCO_Action_Plan.xlsx", "pattern": r"(?<![A-Za-z])MR(?![a-z])"}),
-    ("XR", {"url": "", "cache": "XR_Open_FCO_list.xlsx", "pattern": r"(?<![A-Za-z])XR(?![a-z])"}),
-    ("CT/AMI", {"url": "", "cache": "CT_AMI_FCO_Action_Plan.xlsx", "pattern": r"(?<![A-Za-z])CT(?![a-z])"}),
+    ("MR", {"url": "https://share.philips.com/:x:/r/sites/KRHSFCOstatus/_layouts/15/Doc.aspx?sourcedoc="
+                   "%7B41877D54-C06C-43EA-A61A-D8EE1F661BF5%7D&file=MR%20FCO%20Action%20Plan.xlsx"
+                   "&action=default&mobileredirect=true",
+            "cache": "MR_FCO_Action_Plan.xlsx", "pattern": r"(?<![A-Za-z])MR(?![a-z])"}),
+    ("XR", {"url": "https://share.philips.com/:x:/r/sites/KRHSFCOstatus/_layouts/15/Doc.aspx?sourcedoc="
+                   "%7B0C5BC8F8-F294-4D5C-8AAD-A4A4CED3B393%7D&file=XR%20Open%20FCO%20list.xlsx"
+                   "&action=default&mobileredirect=true",
+            "cache": "XR_Open_FCO_list.xlsx", "pattern": r"(?<![A-Za-z])XR(?![a-z])"}),
+    ("CT/AMI", {"url": "https://share.philips.com/:x:/r/sites/KRHSFCOstatus/_layouts/15/Doc.aspx?sourcedoc="
+                       "%7BFAACFA92-78CB-4165-BEEB-C5346C578244%7D&file=CT_AMI%20FCO%20Action%20Plan.xlsx"
+                       "&action=default&mobileredirect=true",
+                "cache": "CT_AMI_FCO_Action_Plan.xlsx", "pattern": r"(?<![A-Za-z])CT(?![a-z])"}),
 ])
 
 EXCEL_EXTS = (".xlsx", ".xlsm")
@@ -1046,6 +1055,17 @@ def read_meta(path: Path) -> dict:
 
 
 def add_download_param(url: str) -> str:
+    """파일을 바로 내려받는 주소로 변환.
+    - Doc.aspx?sourcedoc={GUID} (FCO 파일 주소 형태) → 사이트/_layouts/15/download.aspx?UniqueId=GUID
+    - 공유 링크(:x:/g/…, 고객안내문 주소 형태) → 뒤에 download=1"""
+    from urllib.parse import urlparse, parse_qs
+    u = urlparse(url)
+    q = parse_qs(u.query)
+    if "/_layouts/15/" in u.path.lower() and q.get("sourcedoc"):
+        guid = q["sourcedoc"][0].strip("{} ")
+        site = u.path[:u.path.lower().index("/_layouts/15/")]
+        site = re.sub(r"^/:[a-z]+:/[a-z]", "", site)  # "/:x:/r/sites/…" → "/sites/…"
+        return f"{u.scheme}://{u.netloc}{site}/_layouts/15/download.aspx?UniqueId={guid}"
     if "download=1" in url:
         return url
     return url + ("&" if "?" in url else "?") + "download=1"
