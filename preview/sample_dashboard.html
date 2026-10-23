@@ -1,0 +1,1141 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>고객안내문 FCO Dashboard</title>
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7;
+  --surface: #fcfcfb;
+  --surface-2: #f1f0ec;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --muted: #898781;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --border: rgba(11, 11, 11, 0.10);
+  --accent: #2a78d6;
+  --accent-wash: #cde2fb;
+  --done: #2a78d6;
+  --todo: #d03b3b;
+  --band-r: #d03b3b;
+  --band-o: #fab219;
+  --band-g: #0ca30c;
+  --band-n: #898781;
+  --ok-text: #006300;
+  --bad-text: #b42323;
+  --warn-bg: #fff6e0;
+  --warn-ink: #6b4b00;
+  --shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --surface-2: #252523;
+    --ink: #f0efec;
+    --ink-2: #c3c2b7;
+    --muted: #898781;
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --border: rgba(255, 255, 255, 0.10);
+    --accent: #3987e5;
+    --accent-wash: #104281;
+    --done: #3987e5;
+    --ok-text: #0ca30c;
+    --bad-text: #e66767;
+    --warn-bg: #2e2510;
+    --warn-ink: #f3d58a;
+    --shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d;
+  --surface: #1a1a19;
+  --surface-2: #252523;
+  --ink: #f0efec;
+  --ink-2: #c3c2b7;
+  --muted: #898781;
+  --grid: #2c2c2a;
+  --axis: #383835;
+  --border: rgba(255, 255, 255, 0.10);
+  --accent: #3987e5;
+  --accent-wash: #104281;
+  --done: #3987e5;
+  --ok-text: #0ca30c;
+  --bad-text: #e66767;
+  --warn-bg: #2e2510;
+  --warn-ink: #f3d58a;
+  --shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--page);
+  color: var(--ink);
+  font: 14px/1.5 "Segoe UI", "Malgun Gothic", "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+button, input, select { font: inherit; color: inherit; }
+.wrap { max-width: 1480px; margin: 0 auto; padding-left: 24px; padding-right: 24px; }
+@media (max-width: 640px) { .wrap { padding-left: 16px; padding-right: 16px; } }
+
+/* ---------- header ---------- */
+.top { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding-top: 18px; padding-bottom: 10px; }
+.top h1 { font-size: 20px; line-height: 1.3; margin: 0; font-weight: 700; letter-spacing: -0.01em; }
+.meta { margin: 4px 0 0; color: var(--ink-2); font-size: 12.5px; }
+.top-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.banner { margin-top: 4px; margin-bottom: 8px; }
+.banner > div { background: var(--warn-bg); color: var(--warn-ink); border-radius: 8px; padding: 8px 12px; font-size: 13px; }
+.banner > div + div { margin-top: 6px; }
+
+/* ---------- filters + tabs ---------- */
+.sticky { position: sticky; top: 0; z-index: 20; background: var(--page); border-bottom: 1px solid var(--border); }
+.filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 14px; padding-top: 8px; padding-bottom: 8px; }
+.f { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--ink-2); min-width: 0; }
+.f.grow { flex: 1 1 220px; }
+.f select, .f input {
+  height: 34px; border: 1px solid var(--border); background: var(--surface); border-radius: 8px;
+  padding: 0 10px; min-width: 150px; max-width: 100%; font-size: 14px; color: var(--ink);
+}
+.f.grow input { width: 100%; }
+.f input[type="checkbox"] { width: 16px; height: 16px; min-width: 0; padding: 0; margin: 0; accent-color: var(--accent); }
+.check { display: flex; align-items: center; gap: 8px; height: 34px; color: var(--ink); font-size: 13.5px; cursor: pointer; }
+.muted { color: var(--ink-2); font-weight: 400; }
+.f select:focus-visible, .f input:focus-visible, .btn:focus-visible, .tab:focus-visible, [tabindex]:focus-visible, .seg-btn:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 1px;
+}
+.btn {
+  height: 34px; border: 1px solid var(--border); background: var(--surface); border-radius: 8px; padding: 0 12px;
+  cursor: pointer; white-space: nowrap; font-size: 13px;
+}
+.btn:hover { background: var(--surface-2); }
+.btn.ghost { background: transparent; }
+.btn.small { height: 28px; padding: 0 10px; font-size: 12.5px; }
+.tabs { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; }
+.tabs::-webkit-scrollbar { display: none; }
+.tab {
+  border: 0; background: transparent; padding: 10px 14px 9px; cursor: pointer; white-space: nowrap; font-size: 14px;
+  color: var(--ink-2); border-bottom: 2px solid transparent;
+}
+.tab:hover { color: var(--ink); }
+.tab[aria-selected="true"] { color: var(--ink); font-weight: 700; border-bottom-color: var(--accent); }
+.tab .cnt { font-weight: 400; color: var(--muted); margin-left: 4px; font-size: 12px; }
+.active-filters { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding-bottom: 8px; font-size: 12.5px; color: var(--ink-2); }
+.active-filters:empty { display: none; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); background: var(--surface);
+  border-radius: 999px; padding: 2px 4px 2px 10px; font-size: 12.5px; color: var(--ink);
+}
+.chip button { border: 0; background: transparent; cursor: pointer; color: var(--ink-2); padding: 0 6px; font-size: 14px; line-height: 1; }
+
+/* ---------- layout ---------- */
+main { padding-top: 16px; padding-bottom: 40px; }
+.section-title { font-size: 15px; font-weight: 700; margin: 22px 0 10px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.section-title:first-child { margin-top: 0; }
+.section-title .hint { font-weight: 400; color: var(--ink-2); font-size: 12.5px; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); gap: 12px; margin-top: 12px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; min-width: 0; }
+.card h3 { margin: 0 0 2px; font-size: 14px; font-weight: 700; }
+.card .sub { margin: 0 0 12px; color: var(--ink-2); font-size: 12.5px; }
+.subfilters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 14px; margin-bottom: 14px; }
+.empty { color: var(--ink-2); padding: 18px 4px; font-size: 13px; }
+.note { color: var(--ink-2); font-size: 12.5px; margin: 8px 0 0; }
+
+/* ---------- KPI tiles ---------- */
+.kpi {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; text-align: left;
+  display: flex; flex-direction: column; gap: 2px; min-width: 0;
+}
+button.kpi { cursor: pointer; }
+button.kpi:hover { background: var(--surface-2); }
+.kpi.active { outline: 2px solid var(--accent); outline-offset: -1px; }
+.kpi-label { font-size: 12.5px; color: var(--ink-2); display: flex; align-items: center; gap: 6px; }
+.kpi-value { font-size: 28px; font-weight: 700; line-height: 1.2; letter-spacing: -0.01em; }
+.kpi-sub { font-size: 12.5px; color: var(--ink-2); }
+.kpi.hero { grid-column: span 2; }
+.kpi.hero .kpi-value { font-size: 48px; line-height: 1.1; }
+@media (max-width: 520px) { .kpi.hero { grid-column: span 1; } }
+.meter { height: 8px; background: var(--accent-wash); border-radius: 4px; overflow: hidden; margin: 8px 0 4px; }
+.meter > span { display: block; height: 100%; background: var(--done); border-radius: 0 4px 4px 0; }
+.sw { width: 10px; height: 10px; border-radius: 2px; display: inline-block; flex-shrink: 0; }
+
+/* ---------- legends ---------- */
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12.5px; color: var(--ink-2); margin: 0 0 10px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+
+/* ---------- bar lists ---------- */
+.bars { display: flex; flex-direction: column; gap: 2px; }
+.bar-row {
+  display: grid; grid-template-columns: minmax(70px, 32%) minmax(60px, 1fr) auto; align-items: center; gap: 10px;
+  padding: 5px 6px; border-radius: 6px; cursor: pointer;
+}
+.bar-row:hover, .bar-row:focus-visible { background: var(--surface-2); }
+.bar-row.active { background: var(--surface-2); box-shadow: inset 3px 0 0 var(--accent); }
+.bar-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; }
+.track { display: flex; gap: 2px; height: 14px; }
+.track-wrap { min-width: 0; }
+.seg { height: 100%; min-width: 3px; }
+.seg:last-child { border-radius: 0 4px 4px 0; }
+.seg.done { background: var(--done); }
+.seg.todo { background: var(--todo); }
+.seg.r { background: var(--band-r); }
+.seg.o { background: var(--band-o); }
+.seg.g { background: var(--band-g); }
+.seg.n { background: var(--band-n); }
+.bar-val { font-size: 12.5px; color: var(--ink-2); white-space: nowrap; text-align: right; font-variant-numeric: tabular-nums; min-width: 92px; }
+.bar-val b { color: var(--ink); font-weight: 700; }
+.bar-val .okmark { color: var(--ok-text); font-weight: 700; }
+.more { margin-top: 6px; }
+.linkbtn { border: 0; background: transparent; color: var(--accent); cursor: pointer; padding: 4px 6px; font-size: 12.5px; }
+.linkbtn:hover { text-decoration: underline; }
+
+/* ---------- badges ---------- */
+.badge { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; white-space: nowrap; color: var(--ink); }
+.badge + .badge { margin-left: 10px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+.ok { color: var(--ok-text); font-weight: 600; }
+.bad { color: var(--bad-text); font-weight: 600; }
+
+/* ---------- tables ---------- */
+.table-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 8px; }
+.table-tools .count { color: var(--ink-2); font-size: 12.5px; margin-right: auto; }
+.seg-ctl { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--surface); }
+.seg-btn { border: 0; background: transparent; padding: 0 12px; height: 30px; cursor: pointer; font-size: 12.5px; color: var(--ink-2); }
+.seg-btn + .seg-btn { border-left: 1px solid var(--border); }
+.seg-btn[aria-pressed="true"] { background: var(--surface-2); color: var(--ink); font-weight: 700; }
+.tbl-wrap { overflow: auto; max-height: 72vh; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+table { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 13px; }
+th, td { padding: 7px 10px; text-align: left; border-bottom: 1px solid var(--grid); vertical-align: top; }
+th {
+  position: sticky; top: 0; background: var(--surface-2); font-weight: 600; font-size: 12.5px; color: var(--ink-2);
+  white-space: nowrap; cursor: pointer; user-select: none; z-index: 1;
+}
+th:hover { color: var(--ink); }
+th .arr { color: var(--accent); margin-left: 3px; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+td { white-space: nowrap; }
+td.clip { white-space: normal; min-width: 160px; max-width: 320px; }
+tbody tr:hover td { background: var(--surface-2); }
+tbody tr.clickable { cursor: pointer; }
+td a.hlink, td button.hlink { color: var(--ink); text-decoration: none; font-weight: 600; border: 0; background: none; padding: 0; cursor: pointer; text-align: left; }
+td button.hlink:hover { color: var(--accent); text-decoration: underline; }
+.table-more { text-align: center; padding: 8px; }
+
+/* ---------- hospital view ---------- */
+.hosp-layout { display: grid; grid-template-columns: minmax(260px, 360px) minmax(0, 1fr); gap: 14px; align-items: start; }
+@media (max-width: 900px) { .hosp-layout { grid-template-columns: minmax(0, 1fr); } }
+.hosp-layout > * { min-width: 0; }
+.hlist { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.hlist-head { padding: 10px 12px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
+.hlist-items { max-height: 70vh; overflow: auto; }
+.hitem {
+  display: block; width: 100%; text-align: left; border: 0; border-bottom: 1px solid var(--grid); background: transparent;
+  padding: 9px 12px; cursor: pointer;
+}
+.hitem:hover { background: var(--surface-2); }
+.hitem[aria-current="true"] { background: var(--surface-2); box-shadow: inset 3px 0 0 var(--accent); }
+.hitem .nm { font-weight: 600; font-size: 13.5px; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hitem .pp { color: var(--ink-2); font-size: 12px; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hitem .bd { display: flex; flex-wrap: wrap; gap: 2px 10px; margin-top: 3px; }
+.hdetail .card + .card { margin-top: 12px; }
+.hdetail h2 { margin: 0; font-size: 19px; }
+.hdetail .aliases { color: var(--ink-2); font-size: 12.5px; margin-top: 2px; }
+.mini-kpis { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 12px; }
+.mini-kpis div { display: flex; flex-direction: column; }
+.mini-kpis .l { font-size: 12px; color: var(--ink-2); display: inline-flex; align-items: center; gap: 6px; }
+.mini-kpis .v { font-size: 22px; font-weight: 700; }
+
+/* ---------- info ---------- */
+.kv { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; font-size: 13px; }
+.kv dt { color: var(--ink-2); }
+.kv dd { margin: 0; }
+.warnlist { margin: 0; padding-left: 18px; color: var(--warn-ink); }
+.foot { color: var(--muted); font-size: 12px; padding-bottom: 24px; }
+
+/* ---------- tooltip ---------- */
+.tip {
+  position: fixed; z-index: 50; pointer-events: none; background: var(--surface); color: var(--ink);
+  border: 1px solid var(--border); border-radius: 8px; box-shadow: var(--shadow); padding: 8px 10px; font-size: 12.5px;
+  min-width: 140px; max-width: 320px;
+}
+.tip .tt { font-weight: 600; margin-bottom: 4px; color: var(--ink-2); }
+.tip .tr { display: grid; grid-template-columns: 12px auto 1fr; align-items: center; gap: 6px; }
+.tip .key { width: 12px; height: 3px; border-radius: 2px; }
+.tip .tv { font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }
+.tip .tl { color: var(--ink-2); }
+
+@media print {
+  .sticky, .top-actions, .table-tools .btn, .linkbtn, .hlist { display: none !important; }
+  .hosp-layout { grid-template-columns: 1fr; }
+  .tbl-wrap { max-height: none; overflow: visible; }
+  body { background: #fff; }
+}
+@media (forced-colors: active) {
+  .seg, .meter > span, .sw, .dot { forced-color-adjust: none; }
+}
+</style>
+</head>
+<body>
+<header class="top wrap">
+  <div>
+    <h1>고객안내문 · FCO 통합 Dashboard</h1>
+    <p class="meta" id="metaLine"></p>
+  </div>
+  <div class="top-actions">
+    <button class="btn ghost" id="themeBtn" type="button" title="화면 밝기 바꾸기"></button>
+    <button class="btn ghost" type="button" onclick="window.print()">인쇄</button>
+  </div>
+</header>
+<div class="wrap banner" id="banner"></div>
+<div class="sticky">
+  <div class="wrap filters">
+    <label class="f"><span>담당자 (FSE · 영업)</span><select id="fPerson"></select></label>
+    <label class="f"><span>BU</span><select id="fBu"></select></label>
+    <label class="f grow"><span>검색</span><input id="fQ" type="search" placeholder="병원명 · S/N · FSN · C&amp;R · FCO 번호" autocomplete="off"></label>
+    <button class="btn" id="fReset" type="button">필터 초기화</button>
+  </div>
+  <div class="wrap active-filters" id="activeFilters"></div>
+  <nav class="wrap tabs" role="tablist" id="tabs" aria-label="화면 선택"></nav>
+</div>
+<main class="wrap" id="main"></main>
+<footer class="wrap foot" id="foot"></footer>
+<div id="tip" class="tip" role="tooltip" hidden></div>
+
+<script id="dashboard-data" type="application/json">{"app":"고객안내문 · FCO 통합 Dashboard","version":"1.0.0","generated":"2026-10-23 10:14","today":"2026-10-23","fsn":{"available":true,"error":"","file":{"name":"FSN_sample_A.xlsx","path":"/tmp/claude-0/-home-user-Customer/da7ac776-14fe-51f7-bd79-0847278de21d/scratchpad/sample/FSN_sample_A.xlsx","time":"2026-10-23 10:01","stale":false,"origin":"직접 지정"},"rows":[{"k":"누리병원","h":"누리병원","site":"","bu":"MR","cr":"C\u0026R 2026-0112","fsn":"2026-FSN-001","ft":"코일 커넥터 점검 안내","fco":"","m":"등기","mr":"등기","s":0,"sr":"X","d":"","rp":"","fse":"최유진","sales":"장미래","sn":"MR85752","sys":"Achieva 1.5T","rg":"","rm":"담당자 부재로 재방문 예정","sheet":"전달현황","row":4,"pp":["최유진","장미래"]},{"k":"누리병원","h":"누리병원","site":"","bu":"MR","cr":"C\u0026R 2026-0112","fsn":"2026-FSN-001","ft":"코일 커넥터 점검 안내","fco":"","m":"등기","mr":"등기","s":1,"sr":"O","d":"2026-09-04","rp":"회신완료","fse":"최유진","sales":"장미래","sn":"MR68411","sys":"Achieva 1.5T","rg":"","rm":"원내 메일 전달","sheet":"전달현황","row":5,"pp":["최유진","장미래"]},{"k":"새솔병원","h":"새솔병원","site":"","bu":"MR","cr":"C\u0026R 2026-0112","fsn":"2026-FSN-001","ft":"코일 커넥터 점검 안내","fco":"","m":"등기","mr":"등기","s":1,"sr":"완료","d":"2026-08-15","rp":"","fse":"강도윤","sales":"윤서준","sn":"MR42455","sys":"Achieva 1.5T","rg":"","rm":"원내 메일 전달","sheet":"전달현황","row":6,"pp":["강도윤","윤서준"]},{"k":"보람의료재단보람병원","h":"보람의료재단 보람병원","site":"","bu":"MR","cr":"C\u0026R 2026-0112","fsn":"2026-FSN-001","ft":"코일 커넥터 점검 안내","fco":"","m":"등기","mr":"등기","s":1,"sr":"O","d":"2026-07-13","rp":"회신완료","fse":"정하늘","sales":"장미래","sn":"MR62486","sys":"Achieva 1.5T","rg":"","rm":"","sheet":"전달현황","row":10,"pp":["정하늘","장미래"]},{"k":"보람의료재단보람병원","h":"보람의료재단 보람병원","site":"","bu":"MR","cr":"C\u0026R 2026-0112","fsn":"2026-FSN-001","ft":"코일 커넥터 점검 안내","fco":"","m":"직접전달","mr":"직접전달","s":0,"sr":"진행중","d":"","rp":"","fse":"정하늘","sales":"장미래","sn":"MR34983","sys":"Ingenia 1.5T","rg":"","rm":"","sheet":"전달현황","row":11,"pp":["정하늘","장미래"]},{"k":"이음병원","h":"이음병원","site":"","bu":"MR","cr":"C\u0026R 2026-0112","fsn":"2026-FSN-001","ft":"코일 커넥터 점검 안내","fco":"","m":"이메일","mr":"이메일","s":1,"sr":"완료","d":"2026-10-09","rp":"회신완료","fse":"박지훈","sales":"장미래","sn":"MR29826","sys":"Achieva 1.5T","rg":"","rm":"","sheet":"전달현황","row":12,"pp":["박지훈","장미래"]},{"k":"다솜병원","h":"다솜병원","site":"","bu":"MR","cr":"C\u0026R 2026-0112","fsn":"2026-FSN-001","ft":"코일 커넥터 점검 안내","fco":"","m":"등기","mr":"등기","s":1,"sr":"완료","d":"2026-10-18","rp":"","fse":"정하늘","sales":"장미래","sn":"MR56621","sys":"Ingenia 1.5T","rg":"","rm":"","sheet":"전달현황","row":13,"pp":["정하늘","장미래"]},{"k":"다솜병원","h":"다솜병원","site":"","bu":"MR","cr":"C\u0026R 2026-0112","fsn":"2026-FSN-001","ft":"코일 커넥터 점검 안내","fco":"","m":"등기","mr":"등기","s":1,"sr":"전달완료","d":"2026-07-02","rp":"회신완료","fse":"정하늘","sales":"장미래","sn":"MR79807","sys":"Ingenia 1.5T","rg":"","rm":"","sheet":"전달현황","row":14,"pp":["정하늘","장미래"]},{"k":"푸른숲병원","h":"푸른숲병원","site":"","bu":"MR","cr":"C\u0026R 2026-0112","fsn":"2026-FSN-001","ft":"코일 커넥터 점검 안내","fco":"","m":"등기+이메일","mr":"등기, 이메일","s":1,"sr":"완료","d":"2026-09-16","rp":"","fse":"김민준","sales":"장미래","sn":"MR29811","sys":"Ingenia 1.5T","rg":"","rm":"","sheet":"전달현황","row":15,"pp":["김민준","장미래"]},{"k":"도담병원","h":"도담병원","site":"","bu":"MR","cr":"C\u0026R 2026-0112","fsn":"2026-FSN-001","ft":"코일 커넥터 점검 안내","fco":"","m":"등기+이메일","mr":"등기, 이메일","s":1,"sr":"전달완료","d":"2026-09-30","rp":"회신완료","fse":"최유진","sales":"윤서준","sn":"MR28251","sys":"Achieva 1.5T","rg":"","rm":"","sheet":"전달현황","row":16,"pp":["최유진","윤서준"]},{"k":"온새미로병원","h":"온새미로병원","site":"","bu":"MR","cr":"C\u0026R 2026-0112","fsn":"2026-FSN-001","ft":"코일 커넥터 점검 안내","fco":"","m":"직접전달","mr":"직접전달","s":1,"sr":"O","d":"2026-08-14","rp":"","fse":"최유진","sales":"장미래","sn":"MR17982","sys":"Ingenia 1.5T","rg":"","rm":"","sheet":"전달현황","row":17,"pp":["최유진","장미래"]},{"k":"온새미로병원","h":"온새미로병원","site":"","bu":"MR","cr":"C\u0026R 2026-0112","fsn":"2026-FSN-001","ft":"코일 커넥터 점검 안내","fco":"","m":"등기","mr":"등기","s":1,"sr":"전달완료","d":"2026-07-10","rp":"회신완료","fse":"최유진","sales":"장미래","sn":"MR56371","sys":"Achieva 1.5T","rg":"","rm":"","sheet":"전달현황","row":18,"pp":["최유진","장미래"]},{"k":"별빛병원","h":"별빛병원","site":"","bu":"MR","cr":"C\u0026R 2026-0112","fsn":"2026-FSN-001","ft":"코일 커넥터 점검 안내","fco":"","m":"이메일","mr":"이메일","s":1,"sr":"완료","d":"2026-08-11","rp":"","fse":"김민준","sales":"임하준","sn":"MR72061","sys":"Ingenia 1.5T","rg":"","rm":"원내 메일 전달","sheet":"전달현황","row":19,"pp":["김민준","임하준"]},{"k":"가온대학교병원","h":"가온대학교병원","site":"","bu":"MR","cr":"C\u0026R 2026-0112","fsn":"2026-FSN-001","ft":"코일 커넥터 점검 안내","fco":"","m":"등기","mr":"등기","s":1,"sr":"완료","d":"2026-07-08","rp":"","fse":"김민준","sales":"윤서준","sn":"MR22811","sys":"Ingenia 1.5T","rg":"","rm":"담당자 부재로 재방문 예정","sheet":"전달현황","row":20,"pp":["김민준","윤서준"]},{"k":"가온대학교병원","h":"가온대학교병원","site":"","bu":"MR","cr":"C\u0026R 2026-0112","fsn":"2026-FSN-001","ft":"코일 커넥터 점검 안내","fco":"","m":"등기+이메일","mr":"등기, 이메일","s":1,"sr":"완료","d":"2026-09-11","rp":"","fse":"김민준","sales":"윤서준","sn":"MR69267","sys":"Achieva 1.5T","rg":"","rm":"","sheet":"전달현황","row":21,"pp":["김민준","윤서준"]},{"k":"라온병원","h":"라온병원","site":"","bu":"MR","cr":"C\u0026R 2026-0112","fsn":"2026-FSN-001","ft":"코일 커넥터 점검 안내","fco":"","m":"등기","mr":"등기","s":1,"sr":"전달완료","d":"2026-09-06","rp":"","fse":"최유진","sales":"장미래","sn":"MR94339","sys":"Ingenia 1.5T","rg":"","rm":"","sheet":"전달현황","row":22,"pp":["최유진","장미래"]},{"k":"한빛대학교병원","h":"한빛대학교병원","site":"","bu":"CT","cr":"C\u0026R 2026-0135","fsn":"2026-FSN-002","ft":"소프트웨어 업데이트 안내","fco":"","m":"직접전달","mr":"직접전달","s":1,"sr":"O","d":"2026-10-13","rp":"회신완료","fse":"박지훈","sales":"윤서준","sn":"CT74895","sys":"Brilliance 64","rg":"","rm":"담당자 부재로 재방문 예정","sheet":"전달현황","row":23,"pp":["박지훈","윤서준"]},{"k":"한빛대학교병원","h":"한빛대학교병원","site":"","bu":"CT","cr":"C\u0026R 2026-0135","fsn":"2026-FSN-002","ft":"소프트웨어 업데이트 안내","fco":"","m":"","mr":"","s":0,"sr":"진행중","d":"","rp":"","fse":"박지훈","sales":"윤서준","sn":"CT68829","sys":"IQon Spectral CT","rg":"","rm":"","sheet":"전달현황","row":24,"pp":["박지훈","윤서준"]},{"k":"가람의료원","h":"가람의료원","site":"","bu":"CT","cr":"C\u0026R 2026-0135","fsn":"2026-FSN-002","ft":"소프트웨어 업데이트 안내","fco":"","m":"등기","mr":"등기","s":1,"sr":"전달완료","d":"2026-08-24","rp":"회신완료","fse":"이서연","sales":"윤서준","sn":"CT20173","sys":"Brilliance 64","rg":"","rm":"","sheet":"전달현황","row":25,"pp":["이서연","윤서준"]},{"k":"아라병원","h":"아라병원","site":"","bu":"CT","cr":"C\u0026R 2026-0135","fsn":"2026-FSN-002","ft":"소프트웨어 업데이트 안내","fco":"","m":"등기+이메일","mr":"등기, 이메일","s":1,"sr":"완료","d":"2026-09-11","rp":"회신완료","fse":"김민준","sales":"윤서준","sn":"CT88738","sys":"IQon Spectral CT","rg":"","rm":"","sheet":"전달현황","row":27,"pp":["김민준","윤서준"]},{"k":"하람병원","h":"하람병원","site":"","bu":"CT","cr":"C\u0026R 2026-0135","fsn":"2026-FSN-002","ft":"소프트웨어 업데이트 안내","fco":"","m":"등기","mr":"등기","s":1,"sr":"완료","d":"2026-09-15","rp":"회신완료","fse":"김민준","sales":"한지우","sn":"CT25119","sys":"Incisive CT","rg":"","rm":"","sheet":"전달현황","row":28,"pp":["김민준","한지우"]},{"k":"하람병원","h":"하람병원","site":"","bu":"CT","cr":"C\u0026R 2026-0135","fsn":"2026-FSN-002","ft":"소프트웨어 업데이트 안내","fco":"","m":"등기","mr":"등기","s":1,"sr":"완료","d":"2026-07-08","rp":"회신완료","fse":"김민준","sales":"한지우","sn":"CT71078","sys":"IQon Spectral CT","rg":"","rm":"담당자 부재로 재방문 예정","sheet":"전달현황","row":29,"pp":["김민준","한지우"]},{"k":"다솜병원","h":"다솜병원","site":"","bu":"CT","cr":"C\u0026R 2026-0135","fsn":"2026-FSN-002","ft":"소프트웨어 업데이트 안내","fco":"","m":"등기","mr":"등기","s":1,"sr":"완료","d":"2026-09-12","rp":"","fse":"정하늘","sales":"장미래","sn":"CT21928","sys":"Brilliance 64","rg":"","rm":"","sheet":"전달현황","row":30,"pp":["정하늘","장미래"]},{"k":"다솜병원","h":"다솜병원","site":"","bu":"CT","cr":"C\u0026R 2026-0135","fsn":"2026-FSN-002","ft":"소프트웨어 업데이트 안내","fco":"","m":"직접전달","mr":"직접전달","s":1,"sr":"전달완료","d":"2026-07-21","rp":"","fse":"정하늘","sales":"장미래","sn":"CT44224","sys":"Brilliance 64","rg":"","rm":"원내 메일 전달","sheet":"전달현황","row":31,"pp":["정하늘","장미래"]},{"k":"늘봄병원","h":"늘봄병원","site":"","bu":"CT","cr":"C\u0026R 2026-0135","fsn":"2026-FSN-002","ft":"소프트웨어 업데이트 안내","fco":"","m":"이메일","mr":"이메일","s":1,"sr":"O","d":"2026-08-18","rp":"회신완료","fse":"이서연","sales":"윤서준","sn":"CT13798","sys":"Brilliance 64","rg":"","rm":"원내 메일 전달","sheet":"전달현황","row":32,"pp":["이서연","윤서준"]},{"k":"늘봄병원","h":"늘봄병원","site":"","bu":"CT","cr":"C\u0026R 2026-0135","fsn":"2026-FSN-002","ft":"소프트웨어 업데이트 안내","fco":"","m":"직접전달","mr":"직접전달","s":0,"sr":"미전달","d":"","rp":"","fse":"이서연","sales":"윤서준","sn":"CT46623","sys":"Incisive CT","rg":"","rm":"원내 메일 전달","sheet":"전달현황","row":33,"pp":["이서연","윤서준"]},{"k":"소망병원","h":"소망병원","site":"","bu":"CT","cr":"C\u0026R 2026-0135","fsn":"2026-FSN-002","ft":"소프트웨어 업데이트 안내","fco":"","m":"이메일","mr":"이메일","s":1,"sr":"완료","d":"2026-08-07","rp":"","fse":"김민준","sales":"임하준","sn":"CT95587","sys":"IQon Spectral CT","rg":"","rm":"","sheet":"전달현황","row":34,"pp":["김민준","임하준"]},{"k":"푸른숲병원","h":"푸른숲병원","site":"","bu":"CT","cr":"C\u0026R 2026-0135","fsn":"2026-FSN-002","ft":"소프트웨어 업데이트 안내","fco":"","m":"등기","mr":"등기","s":1,"sr":"완료","d":"2026-09-04","rp":"","fse":"김민준","sales":"장미래","sn":"CT81913","sys":"Incisive CT","rg":"","rm":"담당자 부재로 재방문 예정","sheet":"전달현황","row":35,"pp":["김민준","장미래"]},{"k":"푸른숲병원","h":"푸른숲병원","site":"","bu":"CT","cr":"C\u0026R 2026-0135","fsn":"2026-FSN-002","ft":"소프트웨어 업데이트 안내","fco":"","m":"","mr":"","s":0,"sr":"미전달","d":"","rp":"","fse":"김민준","sales":"장미래","sn":"CT27168","sys":"Brilliance 64","rg":"","rm":"원내 메일 전달","sheet":"전달현황","row":36,"pp":["김민준","장미래"]},{"k":"온새미로병원","h":"온새미로병원","site":"","bu":"CT","cr":"C\u0026R 2026-0135","fsn":"2026-FSN-002","ft":"소프트웨어 업데이트 안내","fco":"","m":"등기","mr":"등기","s":0,"sr":"X","d":"","rp":"","fse":"최유진","sales":"장미래","sn":"CT75688","sys":"IQon Spectral CT","rg":"","rm":"","sheet":"전달현황","row":37,"pp":["최유진","장미래"]},{"k":"나래병원","h":"나래병원","site":"","bu":"CT","cr":"C\u0026R 2026-0135","fsn":"2026-FSN-002","ft":"소프트웨어 업데이트 안내","fco":"","m":"이메일","mr":"이메일","s":1,"sr":"완료","d":"2026-08-17","rp":"","fse":"정하늘","sales":"윤서준","sn":"CT41541","sys":"Brilliance 64","rg":"","rm":"","sheet":"전달현황","row":38,"pp":["정하늘","윤서준"]},{"k":"라온병원","h":"라온병원","site":"","bu":"CT","cr":"C\u0026R 2026-0135","fsn":"2026-FSN-002","ft":"소프트웨어 업데이트 안내","fco":"","m":"직접전달","mr":"직접전달","s":0,"sr":"미전달","d":"","rp":"","fse":"최유진","sales":"장미래","sn":"CT43175","sys":"Incisive CT","rg":"","rm":"","sheet":"전달현황","row":39,"pp":["최유진","장미래"]},{"k":"라온병원","h":"라온병원","site":"","bu":"CT","cr":"C\u0026R 2026-0135","fsn":"2026-FSN-002","ft":"소프트웨어 업데이트 안내","fco":"","m":"","mr":"","s":0,"sr":"진행중","d":"","rp":"","fse":"최유진","sales":"장미래","sn":"CT71307","sys":"Incisive CT","rg":"","rm":"","sheet":"전달현황","row":40,"pp":["최유진","장미래"]},{"k":"한빛대학교병원","h":"한빛대학교병원","site":"","bu":"IGT","cr":"C\u0026R 2026-0151","fsn":"2026-FSN-003","ft":"테이블 브레이크 점검 안내","fco":"","m":"직접전달","mr":"직접전달","s":1,"sr":"완료","d":"2026-09-02","rp":"회신완료","fse":"박지훈","sales":"윤서준","sn":"IG85290","sys":"Azurion 7 M20","rg":"","rm":"","sheet":"전달현황","row":41,"pp":["박지훈","윤서준"]},{"k":"가람의료원","h":"가람의료원","site":"","bu":"IGT","cr":"C\u0026R 2026-0151","fsn":"2026-FSN-003","ft":"테이블 브레이크 점검 안내","fco":"","m":"","mr":"","s":0,"sr":"","d":"","rp":"","fse":"이서연","sales":"윤서준","sn":"IG55898","sys":"Allura Xper FD20","rg":"","rm":"원내 메일 전달","sheet":"전달현황","row":42,"pp":["이서연","윤서준"]},{"k":"가람의료원","h":"가람의료원","site":"","bu":"IGT","cr":"C\u0026R 2026-0151","fsn":"2026-FSN-003","ft":"테이블 브레이크 점검 안내","fco":"","m":"직접전달","mr":"직접전달","s":1,"sr":"O","d":"2026-07-24","rp":"회신완료","fse":"이서연","sales":"윤서준","sn":"IG86008","sys":"Allura Xper FD20","rg":"","rm":"원내 메일 전달","sheet":"전달현황","row":43,"pp":["이서연","윤서준"]},{"k":"새솔병원","h":"새솔병원","site":"","bu":"IGT","cr":"C\u0026R 2026-0151","fsn":"2026-FSN-003","ft":"테이블 브레이크 점검 안내","fco":"","m":"등기","mr":"등기","s":1,"sr":"완료","d":"2026-09-16","rp":"","fse":"강도윤","sales":"윤서준","sn":"IG32026","sys":"Allura Xper FD20","rg":"","rm":"","sheet":"전달현황","row":44,"pp":["강도윤","윤서준"]},{"k":"새솔병원","h":"새솔병원","site":"","bu":"IGT","cr":"C\u0026R 2026-0151","fsn":"2026-FSN-003","ft":"테이블 브레이크 점검 안내","fco":"","m":"등기","mr":"등기","s":0,"sr":"X","d":"","rp":"","fse":"강도윤","sales":"윤서준","sn":"IG74709","sys":"Azurion 7 M20","rg":"","rm":"원내 메일 전달","sheet":"전달현황","row":45,"pp":["강도윤","윤서준"]},{"k":"다온병원","h":"다온병원","site":"","bu":"IGT","cr":"C\u0026R 2026-0151","fsn":"2026-FSN-003","ft":"테이블 브레이크 점검 안내","fco":"","m":"직접전달","mr":"직접전달","s":1,"sr":"완료","d":"2026-10-05","rp":"","fse":"김민준","sales":"한지우","sn":"IG82016","sys":"Allura Xper FD20","rg":"","rm":"원내 메일 전달","sheet":"전달현황","row":46,"pp":["김민준","한지우"]},{"k":"다온병원","h":"다온병원","site":"","bu":"IGT","cr":"C\u0026R 2026-0151","fsn":"2026-FSN-003","ft":"테이블 브레이크 점검 안내","fco":"","m":"등기+이메일","mr":"등기, 이메일","s":1,"sr":"완료","d":"2026-10-18","rp":"회신완료","fse":"김민준","sales":"한지우","sn":"IG27947","sys":"Allura Xper FD20","rg":"","rm":"","sheet":"전달현황","row":47,"pp":["김민준","한지우"]},{"k":"미르병원","h":"미르병원","site":"","bu":"IGT","cr":"C\u0026R 2026-0151","fsn":"2026-FSN-003","ft":"테이블 브레이크 점검 안내","fco":"","m":"등기","mr":"등기","s":0,"sr":"X","d":"","rp":"","fse":"김민준","sales":"윤서준","sn":"IG64912","sys":"Azurion 7 M20","rg":"","rm":"담당자 부재로 재방문 예정","sheet":"전달현황","row":48,"pp":["김민준","윤서준"]},{"k":"하람병원","h":"하람병원","site":"","bu":"IGT","cr":"C\u0026R 2026-0151","fsn":"2026-FSN-003","ft":"테이블 브레이크 점검 안내","fco":"","m":"등기","mr":"등기","s":1,"sr":"전달완료","d":"2026-10-09","rp":"회신완료","fse":"김민준","sales":"한지우","sn":"IG77676","sys":"Azurion 7 M20","rg":"","rm":"원내 메일 전달","sheet":"전달현황","row":49,"pp":["김민준","한지우"]},{"k":"하람병원","h":"하람병원","site":"","bu":"IGT","cr":"C\u0026R 2026-0151","fsn":"2026-FSN-003","ft":"테이블 브레이크 점검 안내","fco":"","m":"등기","mr":"등기","s":1,"sr":"O","d":"2026-07-08","rp":"","fse":"김민준","sales":"한지우","sn":"IG36897","sys":"Azurion 7 M20","rg":"","rm":"","sheet":"전달현황","row":50,"pp":["김민준","한지우"]},{"k":"늘봄병원","h":"늘봄병원","site":"","bu":"IGT","cr":"C\u0026R 2026-0151","fsn":"2026-FSN-003","ft":"테이블 브레이크 점검 안내","fco":"","m":"","mr":"","s":0,"sr":"진행중","d":"","rp":"","fse":"이서연","sales":"윤서준","sn":"IG35782","sys":"Allura Xper FD20","rg":"","rm":"담당자 부재로 재방문 예정","sheet":"전달현황","row":51,"pp":["이서연","윤서준"]},{"k":"소망병원","h":"소망병원","site":"","bu":"IGT","cr":"C\u0026R 2026-0151","fsn":"2026-FSN-003","ft":"테이블 브레이크 점검 안내","fco":"","m":"직접전달","mr":"직접전달","s":0,"sr":"X","d":"","rp":"","fse":"김민준","sales":"임하준","sn":"IG96584","sys":"Azurion 7 M20","rg":"","rm":"","sheet":"전달현황","row":52,"pp":["김민준","임하준"]},{"k":"소망병원","h":"소망병원","site":"","bu":"IGT","cr":"C\u0026R 2026-0151","fsn":"2026-FSN-003","ft":"테이블 브레이크 점검 안내","fco":"","m":"이메일","mr":"이메일","s":1,"sr":"완료","d":"2026-08-30","rp":"회신완료","fse":"김민준","sales":"임하준","sn":"IG60926","sys":"Azurion 7 M20","rg":"","rm":"","sheet":"전달현황","row":53,"pp":["김민준","임하준"]},{"k":"온새미로병원","h":"온새미로병원","site":"","bu":"IGT","cr":"C\u0026R 2026-0151","fsn":"2026-FSN-003","ft":"테이블 브레이크 점검 안내","fco":"","m":"등기","mr":"등기","s":1,"sr":"완료","d":"2026-07-05","rp":"회신완료","fse":"최유진","sales":"장미래","sn":"IG75752","sys":"Allura Xper FD20","rg":"","rm":"","sheet":"전달현황","row":54,"pp":["최유진","장미래"]},{"k":"온새미로병원","h":"온새미로병원","site":"","bu":"IGT","cr":"C\u0026R 2026-0151","fsn":"2026-FSN-003","ft":"테이블 브레이크 점검 안내","fco":"","m":"","mr":"","s":0,"sr":"X","d":"","rp":"","fse":"최유진","sales":"장미래","sn":"IG79707","sys":"Azurion 7 M20","rg":"","rm":"","sheet":"전달현황","row":55,"pp":["최유진","장미래"]},{"k":"가온대학교병원","h":"가온대학교병원","site":"","bu":"IGT","cr":"C\u0026R 2026-0151","fsn":"2026-FSN-003","ft":"테이블 브레이크 점검 안내","fco":"","m":"등기","mr":"등기","s":0,"sr":"진행중","d":"","rp":"","fse":"김민준","sales":"윤서준","sn":"IG46331","sys":"Azurion 7 M20","rg":"","rm":"","sheet":"전달현황","row":56,"pp":["김민준","윤서준"]},{"k":"가온대학교병원","h":"가온대학교병원","site":"","bu":"IGT","cr":"C\u0026R 2026-0151","fsn":"2026-FSN-003","ft":"테이블 브레이크 점검 안내","fco":"","m":"등기+이메일","mr":"등기, 이메일","s":1,"sr":"완료","d":"2026-08-06","rp":"회신완료","fse":"김민준","sales":"윤서준","sn":"IG76605","sys":"Allura Xper FD20","rg":"","rm":"담당자 부재로 재방문 예정","sheet":"전달현황","row":57,"pp":["김민준","윤서준"]},{"k":"나래병원","h":"나래병원","site":"","bu":"IGT","cr":"C\u0026R 2026-0151","fsn":"2026-FSN-003","ft":"테이블 브레이크 점검 안내","fco":"","m":"등기","mr":"등기","s":0,"sr":"미전달","d":"","rp":"","fse":"정하늘","sales":"윤서준","sn":"IG61427","sys":"Azurion 7 M20","rg":"","rm":"","sheet":"전달현황","row":58,"pp":["정하늘","윤서준"]},{"k":"나래병원","h":"나래병원","site":"","bu":"IGT","cr":"C\u0026R 2026-0151","fsn":"2026-FSN-003","ft":"테이블 브레이크 점검 안내","fco":"","m":"직접전달","mr":"직접전달","s":1,"sr":"O","d":"2026-10-01","rp":"회신완료","fse":"정하늘","sales":"윤서준","sn":"IG51416","sys":"Allura Xper FD20","rg":"","rm":"","sheet":"전달현황","row":59,"pp":["정하늘","윤서준"]},{"k":"라온병원","h":"라온병원","site":"","bu":"IGT","cr":"C\u0026R 2026-0151","fsn":"2026-FSN-003","ft":"테이블 브레이크 점검 안내","fco":"","m":"등기","mr":"등기","s":1,"sr":"O","d":"2026-09-03","rp":"","fse":"최유진","sales":"장미래","sn":"IG97534","sys":"Azurion 7 M20","rg":"","rm":"담당자 부재로 재방문 예정","sheet":"전달현황","row":60,"pp":["최유진","장미래"]},{"k":"라온병원","h":"라온병원","site":"","bu":"IGT","cr":"C\u0026R 2026-0151","fsn":"2026-FSN-003","ft":"테이블 브레이크 점검 안내","fco":"","m":"","mr":"","s":0,"sr":"X","d":"","rp":"","fse":"최유진","sales":"장미래","sn":"IG31163","sys":"Azurion 7 M20","rg":"","rm":"","sheet":"전달현황","row":61,"pp":["최유진","장미래"]},{"k":"한빛대학교병원","h":"한빛대학교병원","site":"","bu":"DXR","cr":"C\u0026R 2026-0178","fsn":"2026-FSN-004","ft":"디텍터 배터리 교체 안내","fco":"","m":"직접전달","mr":"직접전달","s":1,"sr":"완료","d":"2026-07-16","rp":"회신완료","fse":"박지훈","sales":"윤서준","sn":"DX25475","sys":"DigitalDiagnost C90","rg":"","rm":"","sheet":"전달현황","row":62,"pp":["박지훈","윤서준"]},{"k":"한빛대학교병원","h":"한빛대학교병원","site":"","bu":"DXR","cr":"C\u0026R 2026-0178","fsn":"2026-FSN-004","ft":"디텍터 배터리 교체 안내","fco":"","m":"등기","mr":"등기","s":1,"sr":"전달완료","d":"2026-08-28","rp":"회신완료","fse":"박지훈","sales":"윤서준","sn":"DX31621","sys":"MobileDiagnost wDR","rg":"","rm":"","sheet":"전달현황","row":63,"pp":["박지훈","윤서준"]},{"k":"새솔병원","h":"새솔병원","site":"","bu":"DXR","cr":"C\u0026R 2026-0178","fsn":"2026-FSN-004","ft":"디텍터 배터리 교체 안내","fco":"","m":"등기","mr":"등기","s":1,"sr":"O","d":"2026-09-20","rp":"회신완료","fse":"강도윤","sales":"윤서준","sn":"DX47674","sys":"DigitalDiagnost C90","rg":"","rm":"원내 메일 전달","sheet":"전달현황","row":64,"pp":["강도윤","윤서준"]},{"k":"다온병원","h":"다온병원","site":"","bu":"DXR","cr":"C\u0026R 2026-0178","fsn":"2026-FSN-004","ft":"디텍터 배터리 교체 안내","fco":"","m":"","mr":"","s":0,"sr":"미전달","d":"","rp":"","fse":"김민준","sales":"한지우","sn":"DX96313","sys":"DigitalDiagnost C90","rg":"","rm":"","sheet":"전달현황","row":65,"pp":["김민준","한지우"]},{"k":"보람의료재단보람병원","h":"보람의료재단 보람병원","site":"","bu":"DXR","cr":"C\u0026R 2026-0178","fsn":"2026-FSN-004","ft":"디텍터 배터리 교체 안내","fco":"","m":"직접전달","mr":"직접전달","s":1,"sr":"완료","d":"2026-08-24","rp":"","fse":"정하늘","sales":"장미래","sn":"DX62294","sys":"MobileDiagnost wDR","rg":"","rm":"담당자 부재로 재방문 예정","sheet":"전달현황","row":66,"pp":["정하늘","장미래"]},{"k":"보람의료재단보람병원","h":"보람의료재단 보람병원","site":"","bu":"DXR","cr":"C\u0026R 2026-0178","fsn":"2026-FSN-004","ft":"디텍터 배터리 교체 안내","fco":"","m":"등기","mr":"등기","s":1,"sr":"전달완료","d":"2026-09-28","rp":"회신완료","fse":"정하늘","sales":"장미래","sn":"DX23570","sys":"MobileDiagnost wDR","rg":"","rm":"","sheet":"전달현황","row":67,"pp":["정하늘","장미래"]},{"k":"채움병원","h":"채움병원","site":"","bu":"DXR","cr":"C\u0026R 2026-0178","fsn":"2026-FSN-004","ft":"디텍터 배터리 교체 안내","fco":"","m":"등기","mr":"등기","s":1,"sr":"O","d":"2026-08-09","rp":"회신완료","fse":"정하늘","sales":"임하준","sn":"DX37256","sys":"DigitalDiagnost C90","rg":"","rm":"","sheet":"전달현황","row":68,"pp":["정하늘","임하준"]},{"k":"하람병원","h":"하람병원","site":"","bu":"DXR","cr":"C\u0026R 2026-0178","fsn":"2026-FSN-004","ft":"디텍터 배터리 교체 안내","fco":"","m":"직접전달","mr":"직접전달","s":0,"sr":"X","d":"","rp":"","fse":"김민준","sales":"한지우","sn":"DX50875","sys":"MobileDiagnost wDR","rg":"","rm":"담당자 부재로 재방문 예정","sheet":"전달현황","row":69,"pp":["김민준","한지우"]},{"k":"하람병원","h":"하람병원","site":"","bu":"DXR","cr":"C\u0026R 2026-0178","fsn":"2026-FSN-004","ft":"디텍터 배터리 교체 안내","fco":"","m":"직접전달","mr":"직접전달","s":0,"sr":"","d":"","rp":"","fse":"김민준","sales":"한지우","sn":"DX28889","sys":"DigitalDiagnost C90","rg":"","rm":"","sheet":"전달현황","row":70,"pp":["김민준","한지우"]},{"k":"다솜병원","h":"다솜병원","site":"","bu":"DXR","cr":"C\u0026R 2026-0178","fsn":"2026-FSN-004","ft":"디텍터 배터리 교체 안내","fco":"","m":"직접전달","mr":"직접전달","s":1,"sr":"완료","d":"2026-08-08","rp":"","fse":"정하늘","sales":"장미래","sn":"DX90377","sys":"DigitalDiagnost C90","rg":"","rm":"","sheet":"전달현황","row":71,"pp":["정하늘","장미래"]},{"k":"다솜병원","h":"다솜병원","site":"","bu":"DXR","cr":"C\u0026R 2026-0178","fsn":"2026-FSN-004","ft":"디텍터 배터리 교체 안내","fco":"","m":"","mr":"","s":0,"sr":"","d":"","rp":"","fse":"정하늘","sales":"장미래","sn":"DX41377","sys":"DigitalDiagnost C90","rg":"","rm":"","sheet":"전달현황","row":72,"pp":["정하늘","장미래"]},{"k":"늘봄병원","h":"늘봄병원","site":"","bu":"DXR","cr":"C\u0026R 2026-0178","fsn":"2026-FSN-004","ft":"디텍터 배터리 교체 안내","fco":"","m":"직접전달","mr":"직접전달","s":0,"sr":"X","d":"","rp":"","fse":"이서연","sales":"윤서준","sn":"DX20556","sys":"MobileDiagnost wDR","rg":"","rm":"담당자 부재로 재방문 예정","sheet":"전달현황","row":73,"pp":["이서연","윤서준"]},{"k":"늘봄병원","h":"늘봄병원","site":"","bu":"DXR","cr":"C\u0026R 2026-0178","fsn":"2026-FSN-004","ft":"디텍터 배터리 교체 안내","fco":"","m":"이메일","mr":"이메일","s":1,"sr":"O","d":"2026-07-01","rp":"","fse":"이서연","sales":"윤서준","sn":"DX23389","sys":"DigitalDiagnost C90","rg":"","rm":"","sheet":"전달현황","row":74,"pp":["이서연","윤서준"]},{"k":"소망병원","h":"소망병원","site":"","bu":"DXR","cr":"C\u0026R 2026-0178","fsn":"2026-FSN-004","ft":"디텍터 배터리 교체 안내","fco":"","m":"등기+이메일","mr":"등기, 이메일","s":1,"sr":"완료","d":"2026-08-19","rp":"회신완료","fse":"김민준","sales":"임하준","sn":"DX33399","sys":"MobileDiagnost wDR","rg":"","rm":"담당자 부재로 재방문 예정","sheet":"전달현황","row":75,"pp":["김민준","임하준"]},{"k":"푸른숲병원","h":"푸른숲병원","site":"","bu":"DXR","cr":"C\u0026R 2026-0178","fsn":"2026-FSN-004","ft":"디텍터 배터리 교체 안내","fco":"","m":"직접전달","mr":"직접전달","s":0,"sr":"X","d":"","rp":"","fse":"김민준","sales":"장미래","sn":"DX21130","sys":"MobileDiagnost wDR","rg":"","rm":"","sheet":"전달현황","row":76,"pp":["김민준","장미래"]},{"k":"푸른숲병원","h":"푸른숲병원","site":"","bu":"DXR","cr":"C\u0026R 2026-0178","fsn":"2026-FSN-004","ft":"디텍터 배터리 교체 안내","fco":"","m":"","mr":"","s":0,"sr":"","d":"","rp":"","fse":"김민준","sales":"장미래","sn":"DX32282","sys":"DigitalDiagnost C90","rg":"","rm":"","sheet":"전달현황","row":77,"pp":["김민준","장미래"]},{"k":"가온대학교병원","h":"가온대학교병원","site":"","bu":"DXR","cr":"C\u0026R 2026-0178","fsn":"2026-FSN-004","ft":"디텍터 배터리 교체 안내","fco":"","m":"등기+이메일","mr":"등기, 이메일","s":1,"sr":"완료","d":"2026-07-20","rp":"","fse":"김민준","sales":"윤서준","sn":"DX78578","sys":"DigitalDiagnost C90","rg":"","rm":"담당자 부재로 재방문 예정","sheet":"전달현황","row":78,"pp":["김민준","윤서준"]},{"k":"가온대학교병원","h":"가온대학교병원","site":"","bu":"DXR","cr":"C\u0026R 2026-0178","fsn":"2026-FSN-004","ft":"디텍터 배터리 교체 안내","fco":"","m":"등기","mr":"등기","s":1,"sr":"완료","d":"2026-10-04","rp":"회신완료","fse":"김민준","sales":"윤서준","sn":"DX83336","sys":"MobileDiagnost wDR","rg":"","rm":"","sheet":"전달현황","row":79,"pp":["김민준","윤서준"]},{"k":"라온병원","h":"라온병원","site":"","bu":"DXR","cr":"C\u0026R 2026-0178","fsn":"2026-FSN-004","ft":"디텍터 배터리 교체 안내","fco":"","m":"","mr":"","s":0,"sr":"진행중","d":"","rp":"","fse":"최유진","sales":"장미래","sn":"DX62200","sys":"DigitalDiagnost C90","rg":"","rm":"","sheet":"전달현황","row":80,"pp":["최유진","장미래"]},{"k":"한빛대학교병원","h":"한빛대학교병원","site":"","bu":"US","cr":"C\u0026R 2026-0190","fsn":"2026-FSN-005","ft":"프로브 표면 점검 안내","fco":"","m":"이메일","mr":"이메일","s":1,"sr":"완료","d":"2026-10-06","rp":"회신완료","fse":"박지훈","sales":"윤서준","sn":"US49291","sys":"Affiniti 70","rg":"","rm":"","sheet":"전달현황","row":81,"pp":["박지훈","윤서준"]},{"k":"한빛대학교병원","h":"한빛대학교병원","site":"","bu":"US","cr":"C\u0026R 2026-0190","fsn":"2026-FSN-005","ft":"프로브 표면 점검 안내","fco":"","m":"등기","mr":"등기","s":1,"sr":"전달완료","d":"2026-09-22","rp":"","fse":"박지훈","sales":"윤서준","sn":"US33562","sys":"EPIQ Elite","rg":"","rm":"","sheet":"전달현황","row":82,"pp":["박지훈","윤서준"]},{"k":"가람의료원","h":"가람의료원","site":"","bu":"US","cr":"C\u0026R 2026-0190","fsn":"2026-FSN-005","ft":"프로브 표면 점검 안내","fco":"","m":"등기+이메일","mr":"등기, 이메일","s":1,"sr":"O","d":"2026-09-15","rp":"","fse":"이서연","sales":"윤서준","sn":"US22267","sys":"EPIQ Elite","rg":"","rm":"","sheet":"전달현황","row":83,"pp":["이서연","윤서준"]},{"k":"가람의료원","h":"가람의료원","site":"","bu":"US","cr":"C\u0026R 2026-0190","fsn":"2026-FSN-005","ft":"프로브 표면 점검 안내","fco":"","m":"직접전달","mr":"직접전달","s":1,"sr":"전달완료","d":"2026-10-17","rp":"","fse":"이서연","sales":"윤서준","sn":"US72141","sys":"Affiniti 70","rg":"","rm":"","sheet":"전달현황","row":84,"pp":["이서연","윤서준"]},{"k":"다온병원","h":"다온병원","site":"","bu":"US","cr":"C\u0026R 2026-0190","fsn":"2026-FSN-005","ft":"프로브 표면 점검 안내","fco":"","m":"직접전달","mr":"직접전달","s":1,"sr":"전달완료","d":"2026-07-26","rp":"","fse":"김민준","sales":"한지우","sn":"US64433","sys":"Affiniti 70","rg":"","rm":"","sheet":"전달현황","row":85,"pp":["김민준","한지우"]},{"k":"다온병원","h":"다온병원","site":"","bu":"US","cr":"C\u0026R 2026-0190","fsn":"2026-FSN-005","ft":"프로브 표면 점검 안내","fco":"","m":"등기+이메일","mr":"등기, 이메일","s":1,"sr":"완료","d":"2026-09-21","rp":"회신완료","fse":"김민준","sales":"한지우","sn":"US99485","sys":"Affiniti 70","rg":"","rm":"","sheet":"전달현황","row":86,"pp":["김민준","한지우"]},{"k":"보람의료재단보람병원","h":"보람의료재단 보람병원","site":"","bu":"US","cr":"C\u0026R 2026-0190","fsn":"2026-FSN-005","ft":"프로브 표면 점검 안내","fco":"","m":"직접전달","mr":"직접전달","s":0,"sr":"진행중","d":"","rp":"","fse":"정하늘","sales":"장미래","sn":"US99204","sys":"Affiniti 70","rg":"","rm":"","sheet":"전달현황","row":87,"pp":["정하늘","장미래"]},{"k":"하람병원","h":"하람병원","site":"","bu":"US","cr":"C\u0026R 2026-0190","fsn":"2026-FSN-005","ft":"프로브 표면 점검 안내","fco":"","m":"이메일","mr":"이메일","s":1,"sr":"O","d":"2026-08-17","rp":"회신완료","fse":"김민준","sales":"한지우","sn":"US44702","sys":"Affiniti 70","rg":"","rm":"담당자 부재로 재방문 예정","sheet":"전달현황","row":88,"pp":["김민준","한지우"]},{"k":"늘봄병원","h":"늘봄병원","site":"","bu":"US","cr":"C\u0026R 2026-0190","fsn":"2026-FSN-005","ft":"프로브 표면 점검 안내","fco":"","m":"","mr":"","s":0,"sr":"","d":"","rp":"","fse":"이서연","sales":"윤서준","sn":"US68619","sys":"Affiniti 70","rg":"","rm":"담당자 부재로 재방문 예정","sheet":"전달현황","row":90,"pp":["이서연","윤서준"]},{"k":"푸른숲병원","h":"푸른숲병원","site":"","bu":"US","cr":"C\u0026R 2026-0190","fsn":"2026-FSN-005","ft":"프로브 표면 점검 안내","fco":"","m":"등기","mr":"등기","s":1,"sr":"O","d":"2026-08-02","rp":"회신완료","fse":"김민준","sales":"장미래","sn":"US90160","sys":"EPIQ Elite","rg":"","rm":"","sheet":"전달현황","row":91,"pp":["김민준","장미래"]},{"k":"푸른숲병원","h":"푸른숲병원","site":"","bu":"US","cr":"C\u0026R 2026-0190","fsn":"2026-FSN-005","ft":"프로브 표면 점검 안내","fco":"","m":"직접전달","mr":"직접전달","s":0,"sr":"X","d":"","rp":"","fse":"김민준","sales":"장미래","sn":"US96149","sys":"Affiniti 70","rg":"","rm":"","sheet":"전달현황","row":92,"pp":["김민준","장미래"]},{"k":"온새미로병원","h":"온새미로병원","site":"","bu":"US","cr":"C\u0026R 2026-0190","fsn":"2026-FSN-005","ft":"프로브 표면 점검 안내","fco":"","m":"직접전달","mr":"직접전달","s":0,"sr":"","d":"","rp":"","fse":"최유진","sales":"장미래","sn":"US43995","sys":"Affiniti 70","rg":"","rm":"","sheet":"전달현황","row":93,"pp":["최유진","장미래"]},{"k":"별빛병원","h":"별빛병원","site":"","bu":"US","cr":"C\u0026R 2026-0190","fsn":"2026-FSN-005","ft":"프로브 표면 점검 안내","fco":"","m":"등기","mr":"등기","s":1,"sr":"전달완료","d":"2026-07-22","rp":"회신완료","fse":"김민준","sales":"임하준","sn":"US89764","sys":"EPIQ Elite","rg":"","rm":"담당자 부재로 재방문 예정","sheet":"전달현황","row":94,"pp":["김민준","임하준"]},{"k":"별빛병원","h":"별빛병원","site":"","bu":"US","cr":"C\u0026R 2026-0190","fsn":"2026-FSN-005","ft":"프로브 표면 점검 안내","fco":"","m":"이메일","mr":"이메일","s":1,"sr":"O","d":"2026-10-10","rp":"","fse":"김민준","sales":"임하준","sn":"US29634","sys":"EPIQ Elite","rg":"","rm":"","sheet":"전달현황","row":95,"pp":["김민준","임하준"]},{"k":"해오름병원","h":"해오름병원","site":"","bu":"US","cr":"C\u0026R 2026-0190","fsn":"2026-FSN-005","ft":"프로브 표면 점검 안내","fco":"","m":"등기","mr":"등기","s":1,"sr":"완료","d":"2026-07-27","rp":"","fse":"이서연","sales":"윤서준","sn":"US99434","sys":"Affiniti 70","rg":"","rm":"","sheet":"전달현황","row":96,"pp":["이서연","윤서준"]},{"k":"누리병원","h":"누리병원","site":"","bu":"MR","cr":"C\u0026R 2026-0203","fsn":"2026-FSN-006","ft":"헬륨 모니터링 안내","fco":"","m":"등기","mr":"등기","s":1,"sr":"완료","d":"2026-10-10","rp":"회신완료","fse":"최유진","sales":"장미래","sn":"MR85752","sys":"Achieva 1.5T","rg":"","rm":"","sheet":"전달현황","row":98,"pp":["최유진","장미래"]},{"k":"누리병원","h":"누리병원","site":"","bu":"MR","cr":"C\u0026R 2026-0203","fsn":"2026-FSN-006","ft":"헬륨 모니터링 안내","fco":"","m":"등기","mr":"등기","s":1,"sr":"전달완료","d":"2026-07-14","rp":"","fse":"최유진","sales":"장미래","sn":"MR68411","sys":"Achieva 1.5T","rg":"","rm":"담당자 부재로 재방문 예정","sheet":"전달현황","row":99,"pp":["최유진","장미래"]},{"k":"새솔병원","h":"새솔병원","site":"","bu":"MR","cr":"C\u0026R 2026-0203","fsn":"2026-FSN-006","ft":"헬륨 모니터링 안내","fco":"","m":"등기","mr":"등기","s":1,"sr":"완료","d":"2026-08-12","rp":"","fse":"강도윤","sales":"윤서준","sn":"MR42455","sys":"Achieva 1.5T","rg":"","rm":"","sheet":"전달현황","row":100,"pp":["강도윤","윤서준"]},{"k":"다온병원","h":"다온병원","site":"","bu":"MR","cr":"C\u0026R 2026-0203","fsn":"2026-FSN-006","ft":"헬륨 모니터링 안내","fco":"","m":"등기","mr":"등기","s":1,"sr":"완료","d":"2026-08-29","rp":"회신완료","fse":"김민준","sales":"한지우","sn":"MR29781","sys":"Ingenia 1.5T","rg":"","rm":"담당자 부재로 재방문 예정","sheet":"전달현황","row":101,"pp":["김민준","한지우"]},{"k":"다온병원","h":"다온병원","site":"","bu":"MR","cr":"C\u0026R 2026-0203","fsn":"2026-FSN-006","ft":"헬륨 모니터링 안내","fco":"","m":"직접전달","mr":"직접전달","s":1,"sr":"완료","d":"2026-07-10","rp":"","fse":"김민준","sales":"한지우","sn":"MR33097","sys":"Ingenia 1.5T","rg":"","rm":"","sheet":"전달현황","row":102,"pp":["김민준","한지우"]},{"k":"미르병원","h":"미르병원","site":"","bu":"MR","cr":"C\u0026R 2026-0203","fsn":"2026-FSN-006","ft":"헬륨 모니터링 안내","fco":"","m":"이메일","mr":"이메일","s":1,"sr":"완료","d":"2026-09-07","rp":"회신완료","fse":"김민준","sales":"윤서준","sn":"MR46953","sys":"Ingenia Elition 3.0T","rg":"","rm":"","sheet":"전달현황","row":103,"pp":["김민준","윤서준"]},{"k":"보람의료재단보람병원","h":"보람의료재단 보람병원","site":"","bu":"MR","cr":"C\u0026R 2026-0203","fsn":"2026-FSN-006","ft":"헬륨 모니터링 안내","fco":"","m":"등기+이메일","mr":"등기, 이메일","s":1,"sr":"O","d":"2026-09-12","rp":"회신완료","fse":"정하늘","sales":"장미래","sn":"MR34983","sys":"Ingenia 1.5T","rg":"","rm":"원내 메일 전달","sheet":"전달현황","row":105,"pp":["정하늘","장미래"]},{"k":"이음병원","h":"이음병원","site":"","bu":"MR","cr":"C\u0026R 2026-0203","fsn":"2026-FSN-006","ft":"헬륨 모니터링 안내","fco":"","m":"","mr":"","s":0,"sr":"미전달","d":"","rp":"","fse":"박지훈","sales":"장미래","sn":"MR29826","sys":"Achieva 1.5T","rg":"","rm":"","sheet":"전달현황","row":106,"pp":["박지훈","장미래"]},{"k":"다솜병원","h":"다솜병원","site":"","bu":"MR","cr":"C\u0026R 2026-0203","fsn":"2026-FSN-006","ft":"헬륨 모니터링 안내","fco":"","m":"등기+이메일","mr":"등기, 이메일","s":1,"sr":"완료","d":"2026-09-01","rp":"","fse":"정하늘","sales":"장미래","sn":"MR56621","sys":"Ingenia 1.5T","rg":"","rm":"담당자 부재로 재방문 예정","sheet":"전달현황","row":107,"pp":["정하늘","장미래"]},{"k":"다솜병원","h":"다솜병원","site":"","bu":"MR","cr":"C\u0026R 2026-0203","fsn":"2026-FSN-006","ft":"헬륨 모니터링 안내","fco":"","m":"직접전달","mr":"직접전달","s":0,"sr":"","d":"","rp":"","fse":"정하늘","sales":"장미래","sn":"MR79807","sys":"Ingenia 1.5T","rg":"","rm":"","sheet":"전달현황","row":108,"pp":["정하늘","장미래"]},{"k":"푸른숲병원","h":"푸른숲병원","site":"","bu":"MR","cr":"C\u0026R 2026-0203","fsn":"2026-FSN-006","ft":"헬륨 모니터링 안내","fco":"","m":"이메일","mr":"이메일","s":1,"sr":"O","d":"2026-07-14","rp":"회신완료","fse":"김민준","sales":"장미래","sn":"MR29811","sys":"Ingenia 1.5T","rg":"","rm":"","sheet":"전달현황","row":109,"pp":["김민준","장미래"]},{"k":"도담병원","h":"도담병원","site":"","bu":"MR","cr":"C\u0026R 2026-0203","fsn":"2026-FSN-006","ft":"헬륨 모니터링 안내","fco":"","m":"직접전달","mr":"직접전달","s":1,"sr":"O","d":"2026-07-12","rp":"","fse":"최유진","sales":"윤서준","sn":"MR28251","sys":"Achieva 1.5T","rg":"","rm":"","sheet":"전달현황","row":110,"pp":["최유진","윤서준"]},{"k":"온새미로병원","h":"온새미로병원","site":"","bu":"MR","cr":"C\u0026R 2026-0203","fsn":"2026-FSN-006","ft":"헬륨 모니터링 안내","fco":"","m":"이메일","mr":"이메일","s":1,"sr":"완료","d":"2026-09-19","rp":"회신완료","fse":"최유진","sales":"장미래","sn":"MR17982","sys":"Ingenia 1.5T","rg":"","rm":"","sheet":"전달현황","row":111,"pp":["최유진","장미래"]},{"k":"온새미로병원","h":"온새미로병원","site":"","bu":"MR","cr":"C\u0026R 2026-0203","fsn":"2026-FSN-006","ft":"헬륨 모니터링 안내","fco":"","m":"등기","mr":"등기","s":1,"sr":"O","d":"2026-08-27","rp":"","fse":"최유진","sales":"장미래","sn":"MR56371","sys":"Achieva 1.5T","rg":"","rm":"","sheet":"전달현황","row":112,"pp":["최유진","장미래"]},{"k":"별빛병원","h":"별빛병원","site":"","bu":"MR","cr":"C\u0026R 2026-0203","fsn":"2026-FSN-006","ft":"헬륨 모니터링 안내","fco":"","m":"등기","mr":"등기","s":1,"sr":"완료","d":"2026-08-28","rp":"회신완료","fse":"김민준","sales":"임하준","sn":"MR72061","sys":"Ingenia 1.5T","rg":"","rm":"담당자 부재로 재방문 예정","sheet":"전달현황","row":113,"pp":["김민준","임하준"]},{"k":"가온대학교병원","h":"가온대학교병원","site":"","bu":"MR","cr":"C\u0026R 2026-0203","fsn":"2026-FSN-006","ft":"헬륨 모니터링 안내","fco":"","m":"직접전달","mr":"직접전달","s":1,"sr":"전달완료","d":"2026-08-02","rp":"","fse":"김민준","sales":"윤서준","sn":"MR22811","sys":"Ingenia 1.5T","rg":"","rm":"","sheet":"전달현황","row":114,"pp":["김민준","윤서준"]},{"k":"가온대학교병원","h":"가온대학교병원","site":"","bu":"MR","cr":"C\u0026R 2026-0203","fsn":"2026-FSN-006","ft":"헬륨 모니터링 안내","fco":"","m":"등기","mr":"등기","s":0,"sr":"미전달","d":"","rp":"","fse":"김민준","sales":"윤서준","sn":"MR69267","sys":"Achieva 1.5T","rg":"","rm":"","sheet":"전달현황","row":115,"pp":["김민준","윤서준"]},{"k":"라온병원","h":"라온병원","site":"","bu":"MR","cr":"C\u0026R 2026-0203","fsn":"2026-FSN-006","ft":"헬륨 모니터링 안내","fco":"","m":"등기","mr":"등기","s":1,"sr":"O","d":"2026-07-18","rp":"회신완료","fse":"최유진","sales":"장미래","sn":"MR94339","sys":"Ingenia 1.5T","rg":"","rm":"담당자 부재로 재방문 예정","sheet":"전달현황","row":116,"pp":["최유진","장미래"]}],"fields":{"hospital":"병원명","method":"전달방법","status":"전달여부","date":"전달일","reply":"회신여부","cr":"C\u0026R","bu":"BU","fsn":"FSN 번호","fsn_title":"제목","fse":"담당 FSE","sales":"영업담당","sn":"S/N","system":"장비","remark":"비고"},"wide":{},"sheets":[{"name":"전달현황","used":true,"reason":"","rows":106,"header_row":3,"score":14,"data_rows":113,"mapping":{"hospital":"병원명","method":"전달방법","status":"전달여부","date":"전달일","reply":"회신여부","cr":"C\u0026R","bu":"BU","fsn":"FSN 번호","fsn_title":"제목","fse":"담당 FSE","sales":"영업담당","sn":"S/N","system":"장비","remark":"비고"},"wide":{}},{"name":"요약","used":false,"reason":"병원 컬럼을 찾지 못함","rows":0}],"statusValues":[{"value":"완료","state":"done","count":38},{"value":"O","state":"done","count":21},{"value":"전달완료","state":"done","count":15},{"value":"X","state":"todo","count":11},{"value":"해당없음","state":"excluded","count":7},{"value":"진행중","state":"todo","count":7},{"value":"미전달","state":"todo","count":7},{"value":"(빈칸)","state":"empty","count":7}],"methodValues":[{"value":"등기","canon":"등기","count":41},{"value":"직접전달","canon":"직접전달","count":27},{"value":"이메일","canon":"이메일","count":13},{"value":"등기, 이메일","canon":"등기+이메일","count":12}],"excluded":7,"skipped":0,"warnings":[]},"fco":{"available":true,"sources":[{"name":"MR","ok":true,"error":"","file":{"name":"MR FCO Action Plan.xlsx","path":"/tmp/claude-0/-home-user-Customer/da7ac776-14fe-51f7-bd79-0847278de21d/scratchpad/sample/MR FCO Action Plan.xlsx","time":"2026-10-23 10:01","stale":false,"origin":"직접 지정"},"count":30,"closed":16,"sheet":"Action Plan_MR","fields":{"fco":"FCO","due":"Due Date","title":"FCO Title","sysdesc":"System Code Description","syscode":"System Code","sn":"SN","account":"Account","site":"Site","case":"Case","wo":"WO","region":"Region","fse":"FSE","ap":"Action Plan","status":"Status","rel":"고객안내문 관련","remark":"Remark"}},{"name":"XR","ok":true,"error":"","file":{"name":"XR Open FCO list.xlsx","path":"/tmp/claude-0/-home-user-Customer/da7ac776-14fe-51f7-bd79-0847278de21d/scratchpad/sample/XR Open FCO list.xlsx","time":"2026-10-23 10:01","stale":false,"origin":"직접 지정"},"count":45,"closed":11,"sheet":"Action Plan_XR","fields":{"fco":"FCO","due":"Due Date","title":"FCO Title","sysdesc":"System Code Description","syscode":"System Code","sn":"SN","account":"Account","site":"Site","case":"Case","wo":"WO","region":"Region","fse":"FSE","ap":"Action Plan","status":"Status","rel":"고객안내문 관련","remark":"Remark"}},{"name":"CT/AMI","ok":true,"error":"","file":{"name":"CT_AMI FCO Action Plan.xlsx","path":"/tmp/claude-0/-home-user-Customer/da7ac776-14fe-51f7-bd79-0847278de21d/scratchpad/sample/CT_AMI FCO Action Plan.xlsx","time":"2026-10-23 10:01","stale":false,"origin":"직접 지정"},"count":26,"closed":9,"sheet":"Action Plan_CT","fields":{"fco":"FCO","due":"Due Date","title":"FCO Title","sysdesc":"System Code Description","syscode":"System Code","sn":"SN","account":"Account","site":"Site","case":"Case","wo":"WO","region":"Region","fse":"FSE","ap":"Action Plan","status":"Status","rel":"고객안내문 관련","remark":"Remark"}}],"rows":[{"k":"가온대학교병원","h":"(재)가온대학교 병원","site":"본관","src":"MR","fco":"FCO79639525","due":"2028-06-14","dd":600,"b":"g","t":"Detector firmware update","sn":"MR22811","sys":"Ingenia 1.5T","fse":"김민준","ap":"PM 시 진행","st":"In Progress","rel":"대상 (2026-FSN-002)","wo":"WO768539","case":"C6824","rg":"서울","rm":"","row":2,"pp":["김민준"]},{"k":"누리병원","h":"누리병원","site":"본관","src":"MR","fco":"FCO79639525","due":"2028-06-14","dd":600,"b":"g","t":"Detector firmware update","sn":"MR85752","sys":"Achieva 1.5T","fse":"최유진","ap":"","st":"Open","rel":"대상 (2026-FSN-002)","wo":"WO178837","case":"C1218","rg":"대구","rm":"","row":3,"pp":["최유진"]},{"k":"보람의료재단보람병원","h":"보람의료재단 보람병원","site":"본관","src":"MR","fco":"FCO79639525","due":"2028-06-14","dd":600,"b":"g","t":"Detector firmware update","sn":"MR62486","sys":"Achieva 1.5T","fse":"정하늘","ap":"","st":"Open","rel":"대상 (2026-FSN-002)","wo":"WO948898","case":"C2128","rg":"경기","rm":"","row":6,"pp":["정하늘"]},{"k":"보람의료재단보람병원","h":"보람의료재단 보람병원","site":"본관","src":"MR","fco":"FCO79639525","due":"2028-06-14","dd":600,"b":"g","t":"Detector firmware update","sn":"MR34983","sys":"Ingenia 1.5T","fse":"정하늘","ap":"PM 시 진행","st":"Scheduled","rel":"대상 (2026-FSN-002)","wo":"WO917728","case":"C3050","rg":"대구","rm":"","row":8,"pp":["정하늘"]},{"k":"새솔병원","h":"새솔병원","site":"본관","src":"MR","fco":"FCO79639525","due":"2028-06-14","dd":600,"b":"g","t":"Detector firmware update","sn":"MR42455","sys":"Achieva 1.5T","fse":"강도윤","ap":"고객 일정 협의","st":"Open","rel":"대상 (2026-FSN-002)","wo":"WO791288","case":"C2399","rg":"부산","rm":"","row":11,"pp":["강도윤"]},{"k":"온새미로병원","h":"(재)온새미로 병원","site":"본관","src":"MR","fco":"FCO79639525","due":"2028-06-14","dd":600,"b":"g","t":"Detector firmware update","sn":"MR56371","sys":"Achieva 1.5T","fse":"최유진","ap":"고객 일정 협의","st":"Scheduled","rel":"대상 (2026-FSN-002)","wo":"WO189422","case":"C1934","rg":"부산","rm":"","row":12,"pp":["최유진"]},{"k":"보람의료재단보람병원","h":"보람의료재단 보람병원","site":"본관","src":"MR","fco":"FCO78902793","due":"2027-08-19","dd":300,"b":"o","t":"Cooling unit inspection","sn":"MR62486","sys":"Achieva 1.5T","fse":"정하늘","ap":"PM 시 진행","st":"In Progress","rel":"","wo":"WO294682","case":"C4827","rg":"대구","rm":"","row":13,"pp":["정하늘"]},{"k":"이음병원","h":"이음병원","site":"본관","src":"MR","fco":"FCO78902793","due":"2027-08-19","dd":300,"b":"o","t":"Cooling unit inspection","sn":"MR29826","sys":"Achieva 1.5T","fse":"박지훈","ap":"부품 입고 대기","st":"In Progress","rel":"","wo":"WO803834","case":"C8185","rg":"서울","rm":"","row":16,"pp":["박지훈"]},{"k":"가온대학교병원","h":"(재)가온대학교 병원","site":"본관","src":"MR","fco":"FCO74437478","due":"2027-12-17","dd":420,"b":"g","t":"SW update R11.2","sn":"MR69267","sys":"Achieva 1.5T","fse":"김민준","ap":"","st":"In Progress","rel":"","wo":"WO268146","case":"C1108","rg":"부산","rm":"","row":17,"pp":["김민준"]},{"k":"별빛병원","h":"(재)별빛 병원","site":"본관","src":"MR","fco":"FCO74437478","due":"2027-12-17","dd":420,"b":"g","t":"SW update R11.2","sn":"MR72061","sys":"Ingenia 1.5T","fse":"김민준","ap":"부품 입고 대기","st":"In Progress","rel":"","wo":"WO289287","case":"C2235","rg":"부산","rm":"","row":19,"pp":["김민준"]},{"k":"온새미로병원","h":"온새미로병원","site":"본관","src":"MR","fco":"FCO74437478","due":"2027-12-17","dd":420,"b":"g","t":"SW update R11.2","sn":"MR56371","sys":"Achieva 1.5T","fse":"최유진","ap":"","st":"Open","rel":"","wo":"WO947878","case":"C6414","rg":"서울","rm":"","row":20,"pp":["최유진"]},{"k":"가온대학교병원","h":"(재)가온대학교 병원","site":"본관","src":"MR","fco":"FCO74437478","due":"2027-12-17","dd":420,"b":"g","t":"SW update R11.2","sn":"MR22811","sys":"Ingenia 1.5T","fse":"김민준","ap":"고객 일정 협의","st":"In Progress","rel":"","wo":"WO323726","case":"C1555","rg":"대구","rm":"","row":21,"pp":["김민준"]},{"k":"새솔병원","h":"(재)새솔 병원","site":"본관","src":"MR","fco":"FCO74437478","due":"2027-12-17","dd":420,"b":"g","t":"SW update R11.2","sn":"MR42455","sys":"Achieva 1.5T","fse":"강도윤","ap":"고객 일정 협의","st":"Open","rel":"","wo":"WO457890","case":"C6999","rg":"대구","rm":"","row":22,"pp":["강도윤"]},{"k":"푸른숲병원","h":"푸른숲병원","site":"본관","src":"MR","fco":"FCO74437478","due":"2027-12-17","dd":420,"b":"g","t":"SW update R11.2","sn":"MR29811","sys":"Ingenia 1.5T","fse":"김민준","ap":"PM 시 진행","st":"Open","rel":"","wo":"WO680940","case":"C5121","rg":"서울","rm":"","row":23,"pp":["김민준"]},{"k":"보람의료재단보람병원","h":"(재)보람의료재단 보람 병원","site":"본관","src":"MR","fco":"FCO74437478","due":"2027-12-17","dd":420,"b":"g","t":"SW update R11.2","sn":"MR34983","sys":"Ingenia 1.5T","fse":"정하늘","ap":"PM 시 진행","st":"Open","rel":"","wo":"WO449932","case":"C7614","rg":"부산","rm":"","row":24,"pp":["정하늘"]},{"k":"다온병원","h":"다온병원","site":"본관","src":"MR","fco":"FCO74437478","due":"2027-12-17","dd":420,"b":"g","t":"SW update R11.2","sn":"MR29781","sys":"Ingenia 1.5T","fse":"김민준","ap":"PM 시 진행","st":"Scheduled","rel":"","wo":"WO446969","case":"C2932","rg":"경기","rm":"","row":25,"pp":["김민준"]},{"k":"누리병원","h":"누리병원","site":"본관","src":"MR","fco":"FCO75039983","due":"2026-12-02","dd":40,"b":"r","t":"Gradient coil inspection","sn":"MR68411","sys":"Achieva 1.5T","fse":"최유진","ap":"부품 입고 대기","st":"Open","rel":"","wo":"WO206285","case":"C3849","rg":"경기","rm":"","row":28,"pp":["최유진"]},{"k":"가온대학교병원","h":"가온대학교병원","site":"본관","src":"MR","fco":"FCO75039983","due":"2026-12-02","dd":40,"b":"r","t":"Gradient coil inspection","sn":"MR22811","sys":"Ingenia 1.5T","fse":"김민준","ap":"PM 시 진행","st":"In Progress","rel":"","wo":"WO486787","case":"C1219","rg":"경기","rm":"","row":29,"pp":["김민준"]},{"k":"도담병원","h":"도담병원","site":"본관","src":"MR","fco":"FCO75039983","due":"2026-12-02","dd":40,"b":"r","t":"Gradient coil inspection","sn":"MR28251","sys":"Achieva 1.5T","fse":"최유진","ap":"부품 입고 대기","st":"In Progress","rel":"","wo":"WO293752","case":"C5948","rg":"대구","rm":"","row":30,"pp":["최유진"]},{"k":"다온병원","h":"다온병원","site":"본관","src":"MR","fco":"FCO75039983","due":"2026-12-02","dd":40,"b":"r","t":"Gradient coil inspection","sn":"MR33097","sys":"Ingenia 1.5T","fse":"김민준","ap":"부품 입고 대기","st":"Open","rel":"","wo":"WO621944","case":"C1894","rg":"서울","rm":"","row":31,"pp":["김민준"]},{"k":"푸른숲병원","h":"푸른숲병원","site":"본관","src":"MR","fco":"FCO75039983","due":"2026-12-02","dd":40,"b":"r","t":"Gradient coil inspection","sn":"MR29811","sys":"Ingenia 1.5T","fse":"김민준","ap":"","st":"Open","rel":"","wo":"WO757347","case":"C3486","rg":"서울","rm":"","row":34,"pp":["김민준"]},{"k":"가온대학교병원","h":"가온대학교병원","site":"본관","src":"MR","fco":"FCO75039983","due":"2026-12-02","dd":40,"b":"r","t":"Gradient coil inspection","sn":"MR69267","sys":"Achieva 1.5T","fse":"김민준","ap":"부품 입고 대기","st":"Open","rel":"","wo":"WO192420","case":"C2993","rg":"경기","rm":"","row":35,"pp":["김민준"]},{"k":"다솜병원","h":"다솜병원","site":"본관","src":"MR","fco":"FCO75039983","due":"2026-12-02","dd":40,"b":"r","t":"Gradient coil inspection","sn":"MR56621","sys":"Ingenia 1.5T","fse":"정하늘","ap":"부품 입고 대기","st":"Open","rel":"","wo":"WO572673","case":"C4969","rg":"경기","rm":"","row":36,"pp":["정하늘"]},{"k":"라온병원","h":"라온병원","site":"본관","src":"MR","fco":"FCO75039983","due":"2026-12-02","dd":40,"b":"r","t":"Gradient coil inspection","sn":"MR94339","sys":"Ingenia 1.5T","fse":"최유진","ap":"PM 시 진행","st":"Open","rel":"","wo":"WO865168","case":"C3372","rg":"서울","rm":"","row":37,"pp":["최유진"]},{"k":"가온대학교병원","h":"가온대학교병원","site":"본관","src":"MR","fco":"FCO70536346","due":"2026-10-03","dd":-20,"b":"r","t":"Gradient coil inspection","sn":"MR69267","sys":"Achieva 1.5T","fse":"김민준","ap":"PM 시 진행","st":"In Progress","rel":"대상 (2026-FSN-001)","wo":"WO385192","case":"C8417","rg":"부산","rm":"","row":41,"pp":["김민준"]},{"k":"미르병원","h":"미르병원","site":"본관","src":"MR","fco":"FCO70536346","due":"2026-10-03","dd":-20,"b":"r","t":"Gradient coil inspection","sn":"MR46953","sys":"Ingenia Elition 3.0T","fse":"김민준","ap":"고객 일정 협의","st":"Open","rel":"대상 (2026-FSN-001)","wo":"WO735251","case":"C6440","rg":"서울","rm":"","row":42,"pp":["김민준"]},{"k":"온새미로병원","h":"온새미로병원","site":"본관","src":"MR","fco":"FCO70536346","due":"2026-10-03","dd":-20,"b":"r","t":"Gradient coil inspection","sn":"MR17982","sys":"Ingenia 1.5T","fse":"최유진","ap":"","st":"In Progress","rel":"대상 (2026-FSN-001)","wo":"WO358066","case":"C8021","rg":"대구","rm":"","row":43,"pp":["최유진"]},{"k":"다솜병원","h":"(재)다솜 병원","site":"본관","src":"MR","fco":"FCO76311586","due":"2027-03-22","dd":150,"b":"r","t":"Table motor check","sn":"MR79807","sys":"Ingenia 1.5T","fse":"정하늘","ap":"고객 일정 협의","st":"Open","rel":"대상 (2026-FSN-003)","wo":"WO402536","case":"C1692","rg":"경기","rm":"","row":44,"pp":["정하늘"]},{"k":"이음병원","h":"(재)이음 병원","site":"본관","src":"MR","fco":"FCO76311586","due":"2027-03-22","dd":150,"b":"r","t":"Table motor check","sn":"MR29826","sys":"Achieva 1.5T","fse":"박지훈","ap":"PM 시 진행","st":"Open","rel":"대상 (2026-FSN-003)","wo":"WO817895","case":"C9975","rg":"대구","rm":"","row":45,"pp":["박지훈"]},{"k":"가온대학교병원","h":"가온대학교병원","site":"본관","src":"MR","fco":"FCO76311586","due":"2027-03-22","dd":150,"b":"r","t":"Table motor check","sn":"MR69267","sys":"Achieva 1.5T","fse":"김민준","ap":"고객 일정 협의","st":"In Progress","rel":"대상 (2026-FSN-003)","wo":"WO936122","case":"C8942","rg":"대구","rm":"","row":46,"pp":["김민준"]},{"k":"가온대학교병원","h":"가온대학교병원","site":"본관","src":"XR","fco":"FCO77806823","due":"2027-03-22","dd":150,"b":"r","t":"Tube cable replacement","sn":"DX83336","sys":"MobileDiagnost wDR","fse":"김민준","ap":"","st":"Open","rel":"","wo":"WO480450","case":"C5748","rg":"부산","rm":"","row":3,"pp":["김민준"]},{"k":"라온병원","h":"라온병원","site":"본관","src":"XR","fco":"FCO77806823","due":"2027-03-22","dd":150,"b":"r","t":"Tube cable replacement","sn":"IG97534","sys":"Azurion 7 M20","fse":"최유진","ap":"고객 일정 협의","st":"Scheduled","rel":"","wo":"WO925593","case":"C8592","rg":"서울","rm":"","row":5,"pp":["최유진"]},{"k":"늘봄병원","h":"늘봄병원","site":"본관","src":"XR","fco":"FCO77806823","due":"2027-03-22","dd":150,"b":"r","t":"Tube cable replacement","sn":"DX23389","sys":"DigitalDiagnost C90","fse":"이서연","ap":"부품 입고 대기","st":"Open","rel":"","wo":"WO644689","case":"C5596","rg":"서울","rm":"","row":6,"pp":["이서연"]},{"k":"가람의료원","h":"(재)가람의료원","site":"본관","src":"XR","fco":"FCO77806823","due":"2027-03-22","dd":150,"b":"r","t":"Tube cable replacement","sn":"IG86008","sys":"Allura Xper FD20","fse":"이서연","ap":"PM 시 진행","st":"Open","rel":"","wo":"WO715211","case":"C8967","rg":"경기","rm":"","row":7,"pp":["이서연"]},{"k":"채움병원","h":"채움병원","site":"본관","src":"XR","fco":"FCO77806823","due":"2027-03-22","dd":150,"b":"r","t":"Tube cable replacement","sn":"DX37256","sys":"DigitalDiagnost C90","fse":"정하늘","ap":"PM 시 진행","st":"Scheduled","rel":"","wo":"WO568568","case":"C2591","rg":"경기","rm":"","row":8,"pp":["정하늘"]},{"k":"하람병원","h":"하람병원","site":"본관","src":"XR","fco":"FCO77806823","due":"2027-03-22","dd":150,"b":"r","t":"Tube cable replacement","sn":"DX28889","sys":"DigitalDiagnost C90","fse":"김민준","ap":"","st":"Open","rel":"","wo":"WO610483","case":"C8508","rg":"서울","rm":"","row":10,"pp":["김민준"]},{"k":"푸른숲병원","h":"푸른숲병원","site":"본관","src":"XR","fco":"FCO77806823","due":"2027-03-22","dd":150,"b":"r","t":"Tube cable replacement","sn":"DX32282","sys":"DigitalDiagnost C90","fse":"김민준","ap":"고객 일정 협의","st":"Scheduled","rel":"","wo":"WO369687","case":"C2473","rg":"부산","rm":"","row":11,"pp":["김민준"]},{"k":"하람병원","h":"하람병원","site":"본관","src":"XR","fco":"FCO71506312","due":"2027-12-17","dd":420,"b":"g","t":"SW update R11.2","sn":"DX50875","sys":"MobileDiagnost wDR","fse":"김민준","ap":"고객 일정 협의","st":"Open","rel":"","wo":"WO158476","case":"C8920","rg":"서울","rm":"","row":12,"pp":["김민준"]},{"k":"채움병원","h":"채움병원","site":"본관","src":"XR","fco":"FCO71506312","due":"2027-12-17","dd":420,"b":"g","t":"SW update R11.2","sn":"DX37256","sys":"DigitalDiagnost C90","fse":"정하늘","ap":"","st":"Open","rel":"","wo":"WO809769","case":"C4259","rg":"부산","rm":"","row":13,"pp":["정하늘"]},{"k":"한빛대학교병원","h":"한빛대학교병원","site":"본관","src":"XR","fco":"FCO71506312","due":"2027-12-17","dd":420,"b":"g","t":"SW update R11.2","sn":"DX31621","sys":"MobileDiagnost wDR","fse":"박지훈","ap":"고객 일정 협의","st":"Open","rel":"","wo":"WO562825","case":"C3761","rg":"경기","rm":"","row":15,"pp":["박지훈"]},{"k":"하람병원","h":"(재)하람 병원","site":"본관","src":"XR","fco":"FCO71506312","due":"2027-12-17","dd":420,"b":"g","t":"SW update R11.2","sn":"DX28889","sys":"DigitalDiagnost C90","fse":"김민준","ap":"부품 입고 대기","st":"Scheduled","rel":"","wo":"WO852066","case":"C8666","rg":"경기","rm":"","row":16,"pp":["김민준"]},{"k":"늘봄병원","h":"(재)늘봄 병원","site":"본관","src":"XR","fco":"FCO71506312","due":"2027-12-17","dd":420,"b":"g","t":"SW update R11.2","sn":"DX23389","sys":"DigitalDiagnost C90","fse":"이서연","ap":"고객 일정 협의","st":"Open","rel":"","wo":"WO748705","case":"C2274","rg":"부산","rm":"","row":17,"pp":["이서연"]},{"k":"한빛대학교병원","h":"한빛대학교병원","site":"본관","src":"XR","fco":"FCO71506312","due":"2027-12-17","dd":420,"b":"g","t":"SW update R11.2","sn":"DX25475","sys":"DigitalDiagnost C90","fse":"박지훈","ap":"PM 시 진행","st":"In Progress","rel":"","wo":"WO600735","case":"C4831","rg":"서울","rm":"","row":19,"pp":["박지훈"]},{"k":"가온대학교병원","h":"가온대학교병원","site":"본관","src":"XR","fco":"FCO71506312","due":"2027-12-17","dd":420,"b":"g","t":"SW update R11.2","sn":"DX78578","sys":"DigitalDiagnost C90","fse":"김민준","ap":"고객 일정 협의","st":"Open","rel":"","wo":"WO288994","case":"C1929","rg":"대구","rm":"","row":20,"pp":["김민준"]},{"k":"다온병원","h":"다온병원","site":"본관","src":"XR","fco":"FCO77364711","due":"2027-01-31","dd":100,"b":"r","t":"Tube cable replacement","sn":"IG27947","sys":"Allura Xper FD20","fse":"김민준","ap":"고객 일정 협의","st":"Open","rel":"","wo":"WO605871","case":"C8474","rg":"서울","rm":"","row":21,"pp":["김민준"]},{"k":"한빛대학교병원","h":"한빛대학교병원","site":"본관","src":"XR","fco":"FCO77364711","due":"2027-01-31","dd":100,"b":"r","t":"Tube cable replacement","sn":"DX25475","sys":"DigitalDiagnost C90","fse":"박지훈","ap":"PM 시 진행","st":"Scheduled","rel":"","wo":"WO687142","case":"C4459","rg":"대구","rm":"","row":22,"pp":["박지훈"]},{"k":"하람병원","h":"하람병원","site":"본관","src":"XR","fco":"FCO77364711","due":"2027-01-31","dd":100,"b":"r","t":"Tube cable replacement","sn":"IG77676","sys":"Azurion 7 M20","fse":"김민준","ap":"고객 일정 협의","st":"Open","rel":"","wo":"WO553047","case":"C6968","rg":"부산","rm":"","row":23,"pp":["김민준"]},{"k":"나래병원","h":"나래병원","site":"본관","src":"XR","fco":"FCO77364711","due":"2027-01-31","dd":100,"b":"r","t":"Tube cable replacement","sn":"IG51416","sys":"Allura Xper FD20","fse":"정하늘","ap":"부품 입고 대기","st":"Scheduled","rel":"","wo":"WO535825","case":"C5741","rg":"경기","rm":"","row":24,"pp":["정하늘"]},{"k":"다온병원","h":"다온병원","site":"본관","src":"XR","fco":"FCO77364711","due":"2027-01-31","dd":100,"b":"r","t":"Tube cable replacement","sn":"DX96313","sys":"DigitalDiagnost C90","fse":"김민준","ap":"고객 일정 협의","st":"Open","rel":"","wo":"WO328867","case":"C7700","rg":"부산","rm":"","row":27,"pp":["김민준"]},{"k":"보람의료재단보람병원","h":"보람의료재단 보람병원","site":"본관","src":"XR","fco":"FCO72316505","due":"2027-01-31","dd":100,"b":"r","t":"Detector firmware update","sn":"DX62294","sys":"MobileDiagnost wDR","fse":"정하늘","ap":"고객 일정 협의","st":"Open","rel":"대상 (2026-FSN-002)","wo":"WO711249","case":"C4148","rg":"부산","rm":"","row":28,"pp":["정하늘"]},{"k":"라온병원","h":"라온병원","site":"본관","src":"XR","fco":"FCO72316505","due":"2027-01-31","dd":100,"b":"r","t":"Detector firmware update","sn":"IG97534","sys":"Azurion 7 M20","fse":"최유진","ap":"PM 시 진행","st":"Open","rel":"대상 (2026-FSN-002)","wo":"WO527947","case":"C9512","rg":"서울","rm":"","row":29,"pp":["최유진"]},{"k":"새솔병원","h":"(재)새솔 병원","site":"본관","src":"XR","fco":"FCO72316505","due":"2027-01-31","dd":100,"b":"r","t":"Detector firmware update","sn":"IG32026","sys":"Allura Xper FD20","fse":"강도윤","ap":"","st":"Open","rel":"대상 (2026-FSN-002)","wo":"WO194717","case":"C9077","rg":"서울","rm":"","row":30,"pp":["강도윤"]},{"k":"라온병원","h":"라온병원","site":"본관","src":"XR","fco":"FCO72316505","due":"2027-01-31","dd":100,"b":"r","t":"Detector firmware update","sn":"DX62200","sys":"DigitalDiagnost C90","fse":"최유진","ap":"PM 시 진행","st":"Scheduled","rel":"대상 (2026-FSN-002)","wo":"WO360403","case":"C5362","rg":"경기","rm":"","row":31,"pp":["최유진"]},{"k":"가온대학교병원","h":"가온대학교병원","site":"본관","src":"XR","fco":"FCO72316505","due":"2027-01-31","dd":100,"b":"r","t":"Detector firmware update","sn":"IG46331","sys":"Azurion 7 M20","fse":"김민준","ap":"부품 입고 대기","st":"Open","rel":"대상 (2026-FSN-002)","wo":"WO473457","case":"C1076","rg":"대구","rm":"","row":32,"pp":["김민준"]},{"k":"하람병원","h":"하람병원","site":"본관","src":"XR","fco":"FCO72316505","due":"2027-01-31","dd":100,"b":"r","t":"Detector firmware update","sn":"IG77676","sys":"Azurion 7 M20","fse":"김민준","ap":"부품 입고 대기","st":"Open","rel":"대상 (2026-FSN-002)","wo":"WO916971","case":"C6258","rg":"대구","rm":"","row":33,"pp":["김민준"]},{"k":"한빛대학교병원","h":"(재)한빛대학교 병원","site":"본관","src":"XR","fco":"FCO74891257","due":"2026-12-02","dd":40,"b":"r","t":"Cooling unit inspection","sn":"DX25475","sys":"DigitalDiagnost C90","fse":"박지훈","ap":"고객 일정 협의","st":"Open","rel":"","wo":"WO120396","case":"C1492","rg":"서울","rm":"","row":34,"pp":["박지훈"]},{"k":"가온대학교병원","h":"(재)가온대학교 병원","site":"본관","src":"XR","fco":"FCO74891257","due":"2026-12-02","dd":40,"b":"r","t":"Cooling unit inspection","sn":"DX78578","sys":"DigitalDiagnost C90","fse":"김민준","ap":"","st":"Open","rel":"","wo":"WO648312","case":"C8601","rg":"경기","rm":"","row":35,"pp":["김민준"]},{"k":"가온대학교병원","h":"(재)가온대학교 병원","site":"본관","src":"XR","fco":"FCO74891257","due":"2026-12-02","dd":40,"b":"r","t":"Cooling unit inspection","sn":"DX83336","sys":"MobileDiagnost wDR","fse":"김민준","ap":"부품 입고 대기","st":"Open","rel":"","wo":"WO147364","case":"C3932","rg":"부산","rm":"","row":36,"pp":["김민준"]},{"k":"다온병원","h":"다온병원","site":"본관","src":"XR","fco":"FCO74891257","due":"2026-12-02","dd":40,"b":"r","t":"Cooling unit inspection","sn":"IG82016","sys":"Allura Xper FD20","fse":"김민준","ap":"부품 입고 대기","st":"In Progress","rel":"","wo":"WO215385","case":"C5581","rg":"서울","rm":"","row":37,"pp":["김민준"]},{"k":"라온병원","h":"라온병원","site":"본관","src":"XR","fco":"FCO74891257","due":"2026-12-02","dd":40,"b":"r","t":"Cooling unit inspection","sn":"IG31163","sys":"Azurion 7 M20","fse":"최유진","ap":"","st":"In Progress","rel":"","wo":"WO338061","case":"C4726","rg":"경기","rm":"","row":38,"pp":["최유진"]},{"k":"새솔병원","h":"새솔병원","site":"본관","src":"XR","fco":"FCO74891257","due":"2026-12-02","dd":40,"b":"r","t":"Cooling unit inspection","sn":"IG32026","sys":"Allura Xper FD20","fse":"강도윤","ap":"PM 시 진행","st":"In Progress","rel":"","wo":"WO514851","case":"C1593","rg":"서울","rm":"","row":40,"pp":["강도윤"]},{"k":"채움병원","h":"채움병원","site":"본관","src":"XR","fco":"FCO74891257","due":"2026-12-02","dd":40,"b":"r","t":"Cooling unit inspection","sn":"DX37256","sys":"DigitalDiagnost C90","fse":"정하늘","ap":"PM 시 진행","st":"Open","rel":"","wo":"WO850286","case":"C6489","rg":"대구","rm":"","row":41,"pp":["정하늘"]},{"k":"라온병원","h":"라온병원","site":"본관","src":"XR","fco":"FCO74891257","due":"2026-12-02","dd":40,"b":"r","t":"Cooling unit inspection","sn":"IG97534","sys":"Azurion 7 M20","fse":"최유진","ap":"고객 일정 협의","st":"Open","rel":"","wo":"WO482134","case":"C1189","rg":"서울","rm":"","row":43,"pp":["최유진"]},{"k":"가람의료원","h":"가람의료원","site":"본관","src":"XR","fco":"FCO74891257","due":"2026-12-02","dd":40,"b":"r","t":"Cooling unit inspection","sn":"IG55898","sys":"Allura Xper FD20","fse":"이서연","ap":"고객 일정 협의","st":"Open","rel":"","wo":"WO801644","case":"C9270","rg":"서울","rm":"","row":44,"pp":["이서연"]},{"k":"다온병원","h":"(재)다온 병원","site":"본관","src":"XR","fco":"FCO74891257","due":"2026-12-02","dd":40,"b":"r","t":"Cooling unit inspection","sn":"IG27947","sys":"Allura Xper FD20","fse":"김민준","ap":"부품 입고 대기","st":"Open","rel":"","wo":"WO763970","case":"C8433","rg":"서울","rm":"","row":45,"pp":["김민준"]},{"k":"한빛대학교병원","h":"한빛대학교병원","site":"본관","src":"XR","fco":"FCO70576694","due":"2027-06-30","dd":250,"b":"o","t":"Cooling unit inspection","sn":"DX31621","sys":"MobileDiagnost wDR","fse":"박지훈","ap":"부품 입고 대기","st":"Open","rel":"","wo":"WO723157","case":"C1988","rg":"부산","rm":"","row":46,"pp":["박지훈"]},{"k":"새솔병원","h":"새솔병원","site":"본관","src":"XR","fco":"FCO70576694","due":"2027-06-30","dd":250,"b":"o","t":"Cooling unit inspection","sn":"IG74709","sys":"Azurion 7 M20","fse":"강도윤","ap":"고객 일정 협의","st":"In Progress","rel":"","wo":"WO561349","case":"C3431","rg":"서울","rm":"","row":47,"pp":["강도윤"]},{"k":"하람병원","h":"(재)하람 병원","site":"본관","src":"XR","fco":"FCO70576694","due":"2027-06-30","dd":250,"b":"o","t":"Cooling unit inspection","sn":"DX28889","sys":"DigitalDiagnost C90","fse":"김민준","ap":"부품 입고 대기","st":"Scheduled","rel":"","wo":"WO387427","case":"C5723","rg":"경기","rm":"","row":48,"pp":["김민준"]},{"k":"가온대학교병원","h":"가온대학교병원","site":"본관","src":"XR","fco":"FCO70576694","due":"2027-06-30","dd":250,"b":"o","t":"Cooling unit inspection","sn":"DX78578","sys":"DigitalDiagnost C90","fse":"김민준","ap":"","st":"Open","rel":"","wo":"WO674650","case":"C8551","rg":"부산","rm":"","row":50,"pp":["김민준"]},{"k":"한빛대학교병원","h":"한빛대학교병원","site":"본관","src":"XR","fco":"FCO70576694","due":"2027-06-30","dd":250,"b":"o","t":"Cooling unit inspection","sn":"IG85290","sys":"Azurion 7 M20","fse":"박지훈","ap":"고객 일정 협의","st":"In Progress","rel":"","wo":"WO449874","case":"C4969","rg":"경기","rm":"","row":51,"pp":["박지훈"]},{"k":"푸른숲병원","h":"푸른숲병원","site":"본관","src":"XR","fco":"FCO70576694","due":"2027-06-30","dd":250,"b":"o","t":"Cooling unit inspection","sn":"DX21130","sys":"MobileDiagnost wDR","fse":"김민준","ap":"고객 일정 협의","st":"In Progress","rel":"","wo":"WO112455","case":"C7495","rg":"부산","rm":"","row":52,"pp":["김민준"]},{"k":"하람병원","h":"하람병원","site":"본관","src":"XR","fco":"FCO70576694","due":"2027-06-30","dd":250,"b":"o","t":"Cooling unit inspection","sn":"DX50875","sys":"MobileDiagnost wDR","fse":"김민준","ap":"PM 시 진행","st":"Scheduled","rel":"","wo":"WO615277","case":"C6332","rg":"부산","rm":"","row":53,"pp":["김민준"]},{"k":"라온병원","h":"라온병원","site":"본관","src":"XR","fco":"FCO70576694","due":"2027-06-30","dd":250,"b":"o","t":"Cooling unit inspection","sn":"IG31163","sys":"Azurion 7 M20","fse":"최유진","ap":"고객 일정 협의","st":"Scheduled","rel":"","wo":"WO909635","case":"C1932","rg":"서울","rm":"","row":54,"pp":["최유진"]},{"k":"다온병원","h":"다온병원","site":"본관","src":"XR","fco":"FCO70576694","due":"2027-06-30","dd":250,"b":"o","t":"Cooling unit inspection","sn":"IG27947","sys":"Allura Xper FD20","fse":"김민준","ap":"","st":"In Progress","rel":"","wo":"WO561358","case":"C6701","rg":"서울","rm":"","row":55,"pp":["김민준"]},{"k":"온새미로병원","h":"온새미로병원","site":"본관","src":"XR","fco":"FCO70576694","due":"2027-06-30","dd":250,"b":"o","t":"Cooling unit inspection","sn":"IG79707","sys":"Azurion 7 M20","fse":"최유진","ap":"PM 시 진행","st":"In Progress","rel":"","wo":"WO808149","case":"C3299","rg":"경기","rm":"","row":57,"pp":["최유진"]},{"k":"아라병원","h":"아라병원","site":"본관","src":"CT/AMI","fco":"FCO78686715","due":"2026-12-02","dd":40,"b":"r","t":"Cooling unit inspection","sn":"CT88738","sys":"IQon Spectral CT","fse":"김민준","ap":"부품 입고 대기","st":"Open","rel":"","wo":"WO538210","case":"C3451","rg":"부산","rm":"","row":2,"pp":["김민준"]},{"k":"푸른숲병원","h":"푸른숲병원","site":"본관","src":"CT/AMI","fco":"FCO78686715","due":"2026-12-02","dd":40,"b":"r","t":"Cooling unit inspection","sn":"CT27168","sys":"Brilliance 64","fse":"김민준","ap":"PM 시 진행","st":"Open","rel":"","wo":"WO402055","case":"C8502","rg":"부산","rm":"","row":3,"pp":["김민준"]},{"k":"아라병원","h":"아라병원","site":"본관","src":"CT/AMI","fco":"FCO78686715","due":"2026-12-02","dd":40,"b":"r","t":"Cooling unit inspection","sn":"CT24408","sys":"Incisive CT","fse":"김민준","ap":"부품 입고 대기","st":"Open","rel":"","wo":"WO779688","case":"C7299","rg":"부산","rm":"","row":4,"pp":["김민준"]},{"k":"하람병원","h":"하람병원","site":"본관","src":"CT/AMI","fco":"FCO78686715","due":"2026-12-02","dd":40,"b":"r","t":"Cooling unit inspection","sn":"CT71078","sys":"IQon Spectral CT","fse":"김민준","ap":"고객 일정 협의","st":"Open","rel":"","wo":"WO556807","case":"C3375","rg":"대구","rm":"","row":6,"pp":["김민준"]},{"k":"푸른숲병원","h":"(재)푸른숲 병원","site":"본관","src":"CT/AMI","fco":"FCO78686715","due":"2026-12-02","dd":40,"b":"r","t":"Cooling unit inspection","sn":"CT81913","sys":"Incisive CT","fse":"김민준","ap":"PM 시 진행","st":"Open","rel":"","wo":"WO984358","case":"C6306","rg":"경기","rm":"","row":7,"pp":["김민준"]},{"k":"다솜병원","h":"다솜병원","site":"본관","src":"CT/AMI","fco":"FCO78686715","due":"2026-12-02","dd":40,"b":"r","t":"Cooling unit inspection","sn":"CT44224","sys":"Brilliance 64","fse":"정하늘","ap":"PM 시 진행","st":"Open","rel":"","wo":"WO126817","case":"C1175","rg":"서울","rm":"","row":8,"pp":["정하늘"]},{"k":"늘봄병원","h":"늘봄병원","site":"본관","src":"CT/AMI","fco":"FCO78686715","due":"2026-12-02","dd":40,"b":"r","t":"Cooling unit inspection","sn":"CT13798","sys":"Brilliance 64","fse":"이서연","ap":"","st":"In Progress","rel":"","wo":"WO911054","case":"C9789","rg":"부산","rm":"","row":9,"pp":["이서연"]},{"k":"소망병원","h":"소망병원","site":"본관","src":"CT/AMI","fco":"FCO78681335","due":"2027-12-17","dd":420,"b":"g","t":"Table motor check","sn":"CT95587","sys":"IQon Spectral CT","fse":"김민준","ap":"고객 일정 협의","st":"Open","rel":"","wo":"WO492603","case":"C7709","rg":"대구","rm":"","row":10,"pp":["김민준"]},{"k":"온새미로병원","h":"(재)온새미로 병원","site":"본관","src":"CT/AMI","fco":"FCO78681335","due":"2027-12-17","dd":420,"b":"g","t":"Table motor check","sn":"CT75688","sys":"IQon Spectral CT","fse":"최유진","ap":"PM 시 진행","st":"Scheduled","rel":"","wo":"WO521150","case":"C8974","rg":"대구","rm":"","row":11,"pp":["최유진"]},{"k":"늘봄병원","h":"늘봄병원","site":"본관","src":"CT/AMI","fco":"FCO78681335","due":"2027-12-17","dd":420,"b":"g","t":"Table motor check","sn":"CT46623","sys":"Incisive CT","fse":"이서연","ap":"부품 입고 대기","st":"Open","rel":"","wo":"WO637493","case":"C6089","rg":"경기","rm":"","row":13,"pp":["이서연"]},{"k":"라온병원","h":"라온병원","site":"본관","src":"CT/AMI","fco":"FCO74947945","due":"2027-08-19","dd":300,"b":"o","t":"Detector firmware update","sn":"CT43175","sys":"Incisive CT","fse":"최유진","ap":"","st":"Open","rel":"대상 (2026-FSN-004)","wo":"WO470340","case":"C2746","rg":"서울","rm":"","row":14,"pp":["최유진"]},{"k":"늘봄병원","h":"늘봄병원","site":"본관","src":"CT/AMI","fco":"FCO74947945","due":"2027-08-19","dd":300,"b":"o","t":"Detector firmware update","sn":"CT13798","sys":"Brilliance 64","fse":"이서연","ap":"부품 입고 대기","st":"Open","rel":"대상 (2026-FSN-004)","wo":"WO419245","case":"C1064","rg":"대구","rm":"","row":15,"pp":["이서연"]},{"k":"하람병원","h":"하람병원","site":"본관","src":"CT/AMI","fco":"FCO74947945","due":"2027-08-19","dd":300,"b":"o","t":"Detector firmware update","sn":"CT71078","sys":"IQon Spectral CT","fse":"김민준","ap":"PM 시 진행","st":"In Progress","rel":"대상 (2026-FSN-004)","wo":"WO283704","case":"C4221","rg":"대구","rm":"","row":16,"pp":["김민준"]},{"k":"다솜병원","h":"(재)다솜 병원","site":"본관","src":"CT/AMI","fco":"FCO74947945","due":"2027-08-19","dd":300,"b":"o","t":"Detector firmware update","sn":"CT44224","sys":"Brilliance 64","fse":"정하늘","ap":"","st":"Scheduled","rel":"대상 (2026-FSN-004)","wo":"WO250698","case":"C9426","rg":"경기","rm":"","row":17,"pp":["정하늘"]},{"k":"아라병원","h":"아라병원","site":"본관","src":"CT/AMI","fco":"FCO74947945","due":"2027-08-19","dd":300,"b":"o","t":"Detector firmware update","sn":"CT24408","sys":"Incisive CT","fse":"김민준","ap":"부품 입고 대기","st":"In Progress","rel":"대상 (2026-FSN-004)","wo":"WO896389","case":"C9493","rg":"서울","rm":"","row":18,"pp":["김민준"]},{"k":"나래병원","h":"나래병원","site":"본관","src":"CT/AMI","fco":"FCO74947945","due":"2027-08-19","dd":300,"b":"o","t":"Detector firmware update","sn":"CT41541","sys":"Brilliance 64","fse":"정하늘","ap":"","st":"Open","rel":"대상 (2026-FSN-004)","wo":"WO614249","case":"C9560","rg":"대구","rm":"","row":19,"pp":["정하늘"]},{"k":"다솜병원","h":"다솜병원","site":"본관","src":"CT/AMI","fco":"FCO71042120","due":"2026-10-03","dd":-20,"b":"r","t":"Cooling unit inspection","sn":"CT44224","sys":"Brilliance 64","fse":"정하늘","ap":"고객 일정 협의","st":"Open","rel":"","wo":"WO146115","case":"C4651","rg":"경기","rm":"","row":22,"pp":["정하늘"]},{"k":"가람의료원","h":"(재)가람의료원","site":"본관","src":"CT/AMI","fco":"FCO71042120","due":"2026-10-03","dd":-20,"b":"r","t":"Cooling unit inspection","sn":"CT20173","sys":"Brilliance 64","fse":"이서연","ap":"PM 시 진행","st":"Open","rel":"","wo":"WO418427","case":"C8461","rg":"대구","rm":"","row":23,"pp":["이서연"]},{"k":"한빛대학교병원","h":"한빛대학교병원","site":"본관","src":"CT/AMI","fco":"FCO71042120","due":"2026-10-03","dd":-20,"b":"r","t":"Cooling unit inspection","sn":"CT74895","sys":"Brilliance 64","fse":"박지훈","ap":"고객 일정 협의","st":"Scheduled","rel":"","wo":"WO354728","case":"C2106","rg":"대구","rm":"","row":24,"pp":["박지훈"]},{"k":"아라병원","h":"아라병원","site":"본관","src":"CT/AMI","fco":"FCO71042120","due":"2026-10-03","dd":-20,"b":"r","t":"Cooling unit inspection","sn":"CT88738","sys":"IQon Spectral CT","fse":"김민준","ap":"부품 입고 대기","st":"In Progress","rel":"","wo":"WO123515","case":"C8936","rg":"경기","rm":"","row":25,"pp":["김민준"]},{"k":"늘봄병원","h":"(재)늘봄 병원","site":"본관","src":"CT/AMI","fco":"FCO72910303","due":"2027-01-31","dd":100,"b":"r","t":"Tube cable replacement","sn":"CT13798","sys":"Brilliance 64","fse":"이서연","ap":"부품 입고 대기","st":"Open","rel":"","wo":"WO522781","case":"C6503","rg":"서울","rm":"","row":26,"pp":["이서연"]},{"k":"푸른숲병원","h":"(재)푸른숲 병원","site":"본관","src":"CT/AMI","fco":"FCO72910303","due":"2027-01-31","dd":100,"b":"r","t":"Tube cable replacement","sn":"CT81913","sys":"Incisive CT","fse":"김민준","ap":"","st":"In Progress","rel":"","wo":"WO506180","case":"C5013","rg":"경기","rm":"","row":27,"pp":["김민준"]},{"k":"소망병원","h":"소망병원","site":"본관","src":"CT/AMI","fco":"FCO72910303","due":"2027-01-31","dd":100,"b":"r","t":"Tube cable replacement","sn":"CT95587","sys":"IQon Spectral CT","fse":"김민준","ap":"PM 시 진행","st":"Open","rel":"","wo":"WO392692","case":"C1572","rg":"서울","rm":"","row":28,"pp":["김민준"]},{"k":"소망병원","h":"소망병원","site":"본관","src":"CT/AMI","fco":"FCO79141338","due":"2027-01-31","dd":100,"b":"r","t":"Detector firmware update","sn":"CT95587","sys":"IQon Spectral CT","fse":"김민준","ap":"PM 시 진행","st":"Scheduled","rel":"","wo":"WO724902","case":"C5272","rg":"대구","rm":"","row":31,"pp":["김민준"]},{"k":"라온병원","h":"라온병원","site":"본관","src":"CT/AMI","fco":"FCO79141338","due":"2027-01-31","dd":100,"b":"r","t":"Detector firmware update","sn":"CT43175","sys":"Incisive CT","fse":"최유진","ap":"부품 입고 대기","st":"In Progress","rel":"","wo":"WO322866","case":"C9359","rg":"경기","rm":"","row":32,"pp":["최유진"]},{"k":"푸른숲병원","h":"(재)푸른숲 병원","site":"본관","src":"CT/AMI","fco":"FCO79141338","due":"2027-01-31","dd":100,"b":"r","t":"Detector firmware update","sn":"CT81913","sys":"Incisive CT","fse":"김민준","ap":"고객 일정 협의","st":"Open","rel":"","wo":"WO895296","case":"C9197","rg":"부산","rm":"","row":36,"pp":["김민준"]}]},"hospitals":{"누리병원":{"name":"누리병원","pp":["최유진","장미래"],"names":["누리병원"]},"새솔병원":{"name":"새솔병원","pp":["강도윤","윤서준"],"names":["새솔병원","(재)새솔 병원"]},"보람의료재단보람병원":{"name":"보람의료재단 보람병원","pp":["정하늘","장미래"],"names":["보람의료재단 보람병원","(재)보람의료재단 보람 병원"]},"이음병원":{"name":"이음병원","pp":["박지훈","장미래"],"names":["이음병원","(재)이음 병원"]},"다솜병원":{"name":"다솜병원","pp":["정하늘","장미래"],"names":["다솜병원","(재)다솜 병원"]},"푸른숲병원":{"name":"푸른숲병원","pp":["김민준","장미래"],"names":["푸른숲병원","(재)푸른숲 병원"]},"도담병원":{"name":"도담병원","pp":["최유진","윤서준"],"names":["도담병원"]},"온새미로병원":{"name":"온새미로병원","pp":["최유진","장미래"],"names":["온새미로병원","(재)온새미로 병원"]},"별빛병원":{"name":"별빛병원","pp":["김민준","임하준"],"names":["별빛병원","(재)별빛 병원"]},"가온대학교병원":{"name":"가온대학교병원","pp":["김민준","윤서준"],"names":["가온대학교병원","(재)가온대학교 병원"]},"라온병원":{"name":"라온병원","pp":["최유진","장미래"],"names":["라온병원"]},"한빛대학교병원":{"name":"한빛대학교병원","pp":["박지훈","윤서준"],"names":["한빛대학교병원","(재)한빛대학교 병원"]},"가람의료원":{"name":"가람의료원","pp":["이서연","윤서준"],"names":["가람의료원","(재)가람의료원"]},"아라병원":{"name":"아라병원","pp":["김민준","윤서준"],"names":["아라병원"]},"하람병원":{"name":"하람병원","pp":["김민준","한지우"],"names":["하람병원","(재)하람 병원"]},"늘봄병원":{"name":"늘봄병원","pp":["이서연","윤서준"],"names":["늘봄병원","(재)늘봄 병원"]},"소망병원":{"name":"소망병원","pp":["김민준","임하준"],"names":["소망병원"]},"나래병원":{"name":"나래병원","pp":["정하늘","윤서준"],"names":["나래병원"]},"다온병원":{"name":"다온병원","pp":["김민준","한지우"],"names":["다온병원","(재)다온 병원"]},"미르병원":{"name":"미르병원","pp":["김민준","윤서준"],"names":["미르병원"]},"채움병원":{"name":"채움병원","pp":["정하늘","임하준"],"names":["채움병원"]},"해오름병원":{"name":"해오름병원","pp":["이서연","윤서준"],"names":["해오름병원"]}},"link":{"matchedHospitals":21,"linkedBySn":0},"sample":true}</script>
+<script>
+(function () {
+'use strict';
+
+/* ======================= data ======================= */
+const D = JSON.parse(document.getElementById('dashboard-data').textContent);
+const FSN = (D.fsn && D.fsn.rows) || [];
+const FCO = (D.fco && D.fco.rows) || [];
+const H = D.hospitals || {};
+const FSN_OK = !!(D.fsn && D.fsn.available);
+const FCO_OK = !!(D.fco && D.fco.available);
+
+const BAND = {
+  r: { label: '6개월 미만', color: 'var(--band-r)' },
+  o: { label: '1년 미만', color: 'var(--band-o)' },
+  g: { label: '1년 이상', color: 'var(--band-g)' },
+  n: { label: '기한 없음', color: 'var(--band-n)' },
+};
+const BAND_KEYS = ['r', 'o', 'g', 'n'];
+const HAS_BAND_N = FCO.some(r => r.b === 'n');
+const BU_ALIAS = {
+  'MR': ['MR', 'MRI'],
+  'XR': ['XR', 'DXR', 'X-RAY', 'XRAY', 'DR'],
+  'CT/AMI': ['CT', 'AMI', 'CT/AMI', 'CT-AMI', 'CTAMI', 'CT_AMI', 'NM', 'PET'],
+};
+
+const splitPeople = s => (s ? String(s).split(/[,/;\n·&+]|\s{2,}/).map(x => x.trim().replace(/^[()[\]]+|[()[\]]+$/g, '')).filter(x => x && x !== '-' && x !== '?') : []);
+FSN.forEach(r => { r._fse = splitPeople(r.fse); r._sales = splitPeople(r.sales); if (!r.pp) r.pp = r._fse.concat(r._sales); });
+FCO.forEach(r => { if (!r.pp) r.pp = splitPeople(r.fse); });
+
+const FSN_PEOPLE = new Set(FSN.flatMap(r => r.pp));
+const FCO_PEOPLE = new Set(FCO.flatMap(r => r.pp));
+const has = (rows, k) => rows.some(r => r[k] !== undefined && r[k] !== null && r[k] !== '');
+const FSN_HAS = {};
+['bu', 'cr', 'fsn', 'ft', 'fco', 'm', 'd', 'rp', 'fse', 'sales', 'sn', 'sys', 'site', 'rg', 'rm', 'sr'].forEach(k => FSN_HAS[k] = has(FSN, k));
+const hname = k => (H[k] && H[k].name) || k;
+const methodLabel = r => r.m || '미지정';
+const buLabel = r => r.bu || '(BU 없음)';
+const crLabel = r => r.cr || '(C&R 없음)';
+const fsnLabel = r => r.fsn || '(FSN 없음)';
+
+/* ======================= state ======================= */
+const store = {
+  get(k, d) { try { const v = localStorage.getItem('fsnDash.' + k); return v == null ? d : v; } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem('fsnDash.' + k, v); } catch (e) { /* 무시 */ } },
+};
+const S = {
+  tab: store.get('tab', 'overview'),
+  person: '', bu: '', q: '',
+  cr: '', method: '', fsnId: '', fsnView: 'hosp', fsnOnly: 'todo',
+  src: '', band: '', rel: false,
+  hsel: null, hsort: 'prio', hOnly: '',
+  expand: {}, tables: {},
+};
+
+/* ======================= helpers ======================= */
+function h(tag, attrs) {
+  const e = document.createElement(tag);
+  if (attrs) {
+    for (const k in attrs) {
+      const v = attrs[k];
+      if (v == null || v === false) continue;
+      if (k === 'class') e.className = v;
+      else if (k === 'style') e.style.cssText = v;
+      else if (k === 'text') e.textContent = v;
+      else if (k.slice(0, 2) === 'on') e.addEventListener(k.slice(2), v);
+      else e.setAttribute(k, v === true ? '' : v);
+    }
+  }
+  for (let i = 2; i < arguments.length; i++) append(e, arguments[i]);
+  return e;
+}
+function setKids(e) { e.replaceChildren(); for (let i = 1; i < arguments.length; i++) append(e, arguments[i]); }
+function append(e, c) {
+  if (c == null || c === false) return;
+  if (Array.isArray(c)) { c.forEach(x => append(e, x)); return; }
+  e.append(c instanceof Node ? c : document.createTextNode(String(c)));
+}
+const fmt = n => (n == null ? '-' : Number(n).toLocaleString('ko-KR'));
+function pct(done, total) {
+  if (!total) return 0;
+  let p = Math.round(done / total * 100);
+  if (p === 100 && done < total) p = 99;
+  if (p === 0 && done > 0) p = 1;
+  return p;
+}
+const sw = color => h('span', { class: 'sw', style: 'background:' + color });
+const dot = color => h('span', { class: 'dot', style: 'background:' + color });
+function uniqSorted(arr) {
+  return Array.from(new Set(arr.filter(x => x))).sort((a, b) => a.localeCompare(b, 'ko'));
+}
+function ddayText(dd) {
+  if (dd == null) return '';
+  if (dd === 0) return 'D-day';
+  return dd > 0 ? 'D-' + dd : 'D+' + (-dd);
+}
+
+/* ======================= tooltip ======================= */
+const tip = document.getElementById('tip');
+const tipMap = new WeakMap();
+function withTip(el, fn) { el.setAttribute('data-tip', ''); tipMap.set(el, fn); return el; }
+function showTip(el, x, y) {
+  const fn = tipMap.get(el);
+  if (!fn) return;
+  const t = fn();
+  tip.replaceChildren();
+  if (t.title) tip.append(h('div', { class: 'tt', text: t.title }));
+  (t.rows || []).forEach(r => tip.append(h('div', { class: 'tr' },
+    h('span', { class: 'key', style: 'background:' + (r.color || 'transparent') }),
+    h('span', { class: 'tv', text: r.value }),
+    h('span', { class: 'tl', text: r.label }))));
+  tip.hidden = false;
+  const w = tip.offsetWidth, hh = tip.offsetHeight;
+  let left = x + 14, top = y + 14;
+  if (left + w > window.innerWidth - 8) left = Math.max(8, x - w - 14);
+  if (top + hh > window.innerHeight - 8) top = Math.max(8, y - hh - 14);
+  tip.style.left = left + 'px';
+  tip.style.top = top + 'px';
+}
+document.addEventListener('pointermove', e => {
+  const t = e.target && e.target.closest ? e.target.closest('[data-tip]') : null;
+  if (!t) { tip.hidden = true; return; }
+  showTip(t, e.clientX, e.clientY);
+});
+document.addEventListener('focusin', e => {
+  const t = e.target && e.target.closest ? e.target.closest('[data-tip]') : null;
+  if (t) { const r = t.getBoundingClientRect(); showTip(t, r.left + Math.min(r.width, 240), r.top + r.height / 2); }
+});
+document.addEventListener('focusout', () => { tip.hidden = true; });
+window.addEventListener('scroll', () => { tip.hidden = true; }, { passive: true });
+
+/* ======================= filters ======================= */
+function personOK(r, kind) {
+  if (!S.person) return true;
+  const universe = kind === 'fsn' ? FSN_PEOPLE : FCO_PEOPLE;
+  if (universe.has(S.person)) return r.pp.indexOf(S.person) >= 0;
+  const hh = H[r.k];
+  return !!hh && (hh.pp || []).indexOf(S.person) >= 0;
+}
+function buMatchesSrc(bu, src) {
+  if (bu === src) return true;
+  const al = BU_ALIAS[src] || [src];
+  return al.indexOf(String(bu).toUpperCase()) >= 0;
+}
+function buOK(r, kind) {
+  if (!S.bu) return true;
+  if (kind === 'fsn') return r.bu === S.bu;
+  return buMatchesSrc(S.bu, r.src);
+}
+function qOK(r, kind) {
+  if (!S.q) return true;
+  const q = S.q.toLowerCase();
+  const fields = kind === 'fsn'
+    ? [r.h, r.site, r.sn, r.fsn, r.ft, r.cr, r.fco, r.sys]
+    : [r.h, r.site, r.sn, r.fco, r.t, r.sys, r.wo, r.case];
+  fields.push(hname(r.k));
+  return fields.some(v => v && String(v).toLowerCase().indexOf(q) >= 0);
+}
+const fsnBase = (useQ = true) => FSN.filter(r => personOK(r, 'fsn') && buOK(r, 'fsn') && (!useQ || qOK(r, 'fsn')));
+const fcoBase = (useQ = true) => FCO.filter(r => personOK(r, 'fco') && buOK(r, 'fco') && (!useQ || qOK(r, 'fco')));
+const fsnTabRows = () => fsnBase().filter(r =>
+  (!S.cr || crLabel(r) === S.cr) && (!S.method || methodLabel(r) === S.method) && (!S.fsnId || fsnLabel(r) === S.fsnId));
+const fcoTabRows = () => fcoBase().filter(r => (!S.src || r.src === S.src) && (!S.band || r.b === S.band) && (!S.rel || r.rel));
+
+function fsnStats(rows) {
+  const total = rows.length, done = rows.filter(r => r.s).length;
+  const hosp = new Set(rows.map(r => r.k));
+  const todoHosp = new Set(rows.filter(r => !r.s).map(r => r.k));
+  return { total, done, todo: total - done, rate: pct(done, total), hosp: hosp.size, todoHosp: todoHosp.size };
+}
+function bandCounts(rows) {
+  const c = { r: 0, o: 0, g: 0, n: 0, total: rows.length };
+  rows.forEach(r => { c[r.b] = (c[r.b] || 0) + 1; });
+  return c;
+}
+function groupFsn(rows, keyFn) {
+  const m = new Map();
+  rows.forEach(r => {
+    const keys = keyFn(r);
+    (Array.isArray(keys) ? keys : [keys]).forEach(k => {
+      if (!m.has(k)) m.set(k, { key: k, label: k, done: 0, todo: 0 });
+      const g = m.get(k);
+      if (r.s) g.done++; else g.todo++;
+    });
+  });
+  return Array.from(m.values());
+}
+function groupBand(rows, keyFn) {
+  const m = new Map();
+  rows.forEach(r => {
+    const keys = keyFn(r);
+    (Array.isArray(keys) ? keys : [keys]).forEach(k => {
+      if (!m.has(k)) m.set(k, { key: k, label: k, r: 0, o: 0, g: 0, n: 0 });
+      m.get(k)[r.b]++;
+    });
+  });
+  return Array.from(m.values());
+}
+function hospAgg(fsnRows, fcoRows) {
+  const m = new Map();
+  const get = k => {
+    if (!m.has(k)) {
+      const hh = H[k] || {};
+      m.set(k, { k, name: hh.name || k, pp: hh.pp || [], fsnTotal: 0, fsnTodo: 0, r: 0, o: 0, g: 0, n: 0,
+        bus: new Set(), crs: new Set(), methods: new Set(), fsns: new Set(), fse: new Set(), sales: new Set() });
+    }
+    return m.get(k);
+  };
+  fsnRows.forEach(r => {
+    const a = get(r.k);
+    a.fsnTotal++;
+    if (!r.s) {
+      a.fsnTodo++;
+      if (r.fsn) a.fsns.add(r.fsn);
+      if (r.cr) a.crs.add(r.cr);
+    }
+    if (r.bu) a.bus.add(r.bu);
+    if (r.m) a.methods.add(r.m);
+    r._fse.forEach(x => a.fse.add(x));
+    r._sales.forEach(x => a.sales.add(x));
+  });
+  fcoRows.forEach(r => { const a = get(r.k); a[r.b]++; r.pp.forEach(x => a.fse.add(x)); });
+  return Array.from(m.values());
+}
+const prioSort = (a, b) => (b.fsnTodo - a.fsnTodo) || (b.r - a.r) || (b.o - a.o) || a.name.localeCompare(b.name, 'ko');
+
+/* ======================= components ======================= */
+function kpi(o) {
+  const tag = o.onClick ? 'button' : 'div';
+  const el = h(tag, { class: 'kpi' + (o.hero ? ' hero' : '') + (o.active ? ' active' : ''), type: o.onClick ? 'button' : null, onclick: o.onClick || null, 'aria-pressed': o.onClick ? String(!!o.active) : null },
+    h('div', { class: 'kpi-label' }, o.swatch ? sw(o.swatch) : null, o.label),
+    h('div', { class: 'kpi-value', text: o.value }),
+    o.meter != null ? h('div', { class: 'meter', role: 'img', 'aria-label': '전달률 ' + o.meter + '%' }, h('span', { style: 'width:' + o.meter + '%' })) : null,
+    o.sub ? h('div', { class: 'kpi-sub', text: o.sub }) : null);
+  return el;
+}
+function legend(entries) {
+  return h('div', { class: 'legend' }, entries.map(e => h('span', null, sw(e.color), e.label)));
+}
+const FSN_LEGEND = () => legend([{ label: '완료', color: 'var(--done)' }, { label: '미전달', color: 'var(--todo)' }]);
+const BAND_LEGEND = () => legend(BAND_KEYS.filter(k => k !== 'n' || HAS_BAND_N).map(k => ({ label: BAND[k].label, color: BAND[k].color })));
+
+function moreToggle(id, total, limit) {
+  if (total <= limit) return null;
+  const open = !!S.expand[id];
+  return h('div', { class: 'more' }, h('button', { class: 'linkbtn', type: 'button', onclick: () => { S.expand[id] = !open; render(); } },
+    open ? '접기' : '모두 보기 (' + fmt(total) + ')'));
+}
+function rowActivate(el, fn) {
+  el.setAttribute('tabindex', '0');
+  el.setAttribute('role', 'button');
+  el.addEventListener('click', fn);
+  el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(); } });
+  return el;
+}
+/* 100% 누적 막대: 완료 | 미전달 */
+function completionList(items, o) {
+  o = o || {};
+  const limit = o.limit || 8;
+  items = items.slice().sort((a, b) => (b.todo - a.todo) || ((b.done + b.todo) - (a.done + a.todo)) || String(a.label).localeCompare(String(b.label), 'ko'));
+  const shown = S.expand[o.id] ? items : items.slice(0, limit);
+  if (!items.length) return h('div', { class: 'empty', text: '표시할 데이터가 없습니다.' });
+  const list = h('div', { class: 'bars' }, shown.map(it => {
+    const total = it.done + it.todo;
+    const p = pct(it.done, total);
+    const row = h('div', { class: 'bar-row' + (o.active === it.key ? ' active' : ''), 'aria-label': it.label + ' 완료 ' + it.done + ', 미전달 ' + it.todo },
+      h('div', { class: 'bar-label', title: it.label, text: it.label }),
+      h('div', { class: 'track-wrap' }, h('div', { class: 'track' },
+        it.done ? h('span', { class: 'seg done', style: 'flex:' + it.done + ' 1 0' }) : null,
+        it.todo ? h('span', { class: 'seg todo', style: 'flex:' + it.todo + ' 1 0' }) : null)),
+      h('div', { class: 'bar-val' }, it.todo ? [h('b', { text: '미전달 ' + fmt(it.todo) }), ' · ' + p + '%'] : [h('span', { class: 'okmark', text: '✓ 완료' }), ' · ' + fmt(total) + '건']));
+    withTip(row, () => ({ title: it.label, rows: [
+      { color: 'var(--done)', value: fmt(it.done), label: '완료' },
+      { color: 'var(--todo)', value: fmt(it.todo), label: '미전달' },
+      { value: p + '%', label: '전달률 (' + fmt(total) + '건 중)' }] }));
+    if (o.onClick) rowActivate(row, () => o.onClick(it.key));
+    return row;
+  }));
+  return h('div', null, list, moreToggle(o.id, items.length, limit));
+}
+/* 절대값 누적 막대: FCO 마감 구간 */
+function bandList(items, o) {
+  o = o || {};
+  const limit = o.limit || 10;
+  const tot = it => it.r + it.o + it.g + it.n;
+  items = items.slice().sort((a, b) => (b.r - a.r) || (tot(b) - tot(a)) || String(a.label).localeCompare(String(b.label), 'ko'));
+  if (!items.length) return h('div', { class: 'empty', text: '표시할 데이터가 없습니다.' });
+  const max = Math.max.apply(null, items.map(tot));
+  const shown = S.expand[o.id] ? items : items.slice(0, limit);
+  const list = h('div', { class: 'bars' }, shown.map(it => {
+    const t = tot(it);
+    const row = h('div', { class: 'bar-row' + (o.active === it.key ? ' active' : ''), 'aria-label': it.label + ' 합계 ' + t },
+      h('div', { class: 'bar-label', title: it.label, text: it.label }),
+      h('div', { class: 'track-wrap' }, h('div', { class: 'track', style: 'width:' + Math.max(2, t / max * 100) + '%' },
+        BAND_KEYS.map(k => it[k] ? h('span', { class: 'seg ' + k, style: 'flex:' + it[k] + ' 1 0' }) : null))),
+      h('div', { class: 'bar-val' }, h('b', { text: fmt(t) + '건' }), it.r ? ' · 6개월 미만 ' + fmt(it.r) : ''));
+    withTip(row, () => ({ title: it.label, rows: BAND_KEYS.filter(k => k !== 'n' || it.n).map(k => ({ color: BAND[k].color, value: fmt(it[k]), label: BAND[k].label }))
+      .concat([{ value: fmt(t), label: '합계' }]) }));
+    if (o.onClick) rowActivate(row, () => o.onClick(it.key));
+    return row;
+  }));
+  return h('div', null, list, moreToggle(o.id, items.length, limit));
+}
+function segCtl(options, value, onChange, label) {
+  return h('div', { class: 'seg-ctl', role: 'group', 'aria-label': label || '' }, options.map(([v, t]) =>
+    h('button', { class: 'seg-btn', type: 'button', 'aria-pressed': String(v === value), onclick: () => onChange(v), text: t })));
+}
+function selectBox(label, value, options, onChange, allLabel) {
+  const sel = h('select', { onchange: e => onChange(e.target.value) },
+    h('option', { value: '', text: allLabel || '전체' }),
+    options.map(o => { const v = Array.isArray(o) ? o[0] : o; const t = Array.isArray(o) ? o[1] : o; return h('option', { value: v, text: t }); }));
+  sel.value = value;
+  return h('label', { class: 'f' }, h('span', { text: label }), sel);
+}
+function csvExport(name, cols, rows) {
+  const esc = v => { v = v == null ? '' : String(v); return /[",\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+  const lines = [cols.map(c => esc(c.label)).join(',')].concat(rows.map(r => cols.map(c => esc(c.get(r))).join(',')));
+  const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+  const a = h('a', { href: URL.createObjectURL(blob), download: name + '_' + D.today + '.csv' });
+  document.body.append(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+/* 정렬/더보기/CSV 되는 표 */
+function dataTable(o) {
+  const st = S.tables[o.id] || (S.tables[o.id] = { sort: o.sort || null, dir: o.dir || 1, limit: 300 });
+  let cols = o.columns.filter(c => !c.when || c.when());
+  let rows = o.rows.slice();
+  if (st.sort) {
+    const col = cols.find(c => c.key === st.sort);
+    if (col) {
+      const sv = col.sortVal || col.get;
+      rows.sort((a, b) => {
+        const x = sv(a), y = sv(b);
+        const xe = x == null || x === '', ye = y == null || y === '';
+        if (xe && ye) return 0; if (xe) return 1; if (ye) return -1;
+        if (typeof x === 'number' && typeof y === 'number') return (x - y) * st.dir;
+        return String(x).localeCompare(String(y), 'ko', { numeric: true }) * st.dir;
+      });
+    }
+  }
+  const tools = h('div', { class: 'table-tools' },
+    h('span', { class: 'count', text: (o.countText ? o.countText(rows.length) : fmt(rows.length) + '건') }),
+    o.tools || null,
+    o.csv ? h('button', { class: 'btn small', type: 'button', onclick: () => csvExport(o.csv, cols, rows) }, '엑셀(CSV) 저장') : null);
+  if (!rows.length) return h('div', null, tools, h('div', { class: 'card empty', text: o.empty || '해당하는 항목이 없습니다.' }));
+  const thead = h('thead', null, h('tr', null, cols.map(c => {
+    const th = h('th', { class: c.num ? 'num' : null, scope: 'col', 'aria-sort': st.sort === c.key ? (st.dir > 0 ? 'ascending' : 'descending') : null,
+      onclick: () => { if (st.sort === c.key) st.dir = -st.dir; else { st.sort = c.key; st.dir = c.num ? -1 : 1; } render(); } },
+    c.label, st.sort === c.key ? h('span', { class: 'arr', text: st.dir > 0 ? '▲' : '▼' }) : null);
+    return th;
+  })));
+  const tbody = h('tbody', null, rows.slice(0, st.limit).map(r => {
+    const tr = h('tr', { class: o.onRow ? 'clickable' : null, onclick: o.onRow ? () => o.onRow(r) : null },
+      cols.map(c => h('td', { class: [c.num ? 'num' : '', c.nowrap ? 'nowrap' : '', c.clip ? 'clip' : ''].join(' ').trim() || null },
+        c.cell ? c.cell(r) : (c.get(r) == null ? '' : String(c.get(r))))));
+    return tr;
+  }));
+  const wrap = h('div', { class: 'tbl-wrap' }, h('table', null, thead, tbody));
+  const more = rows.length > st.limit ? h('div', { class: 'table-more' }, h('button', { class: 'btn small', type: 'button', onclick: () => { st.limit += 300; render(); } }, '더 보기 (' + fmt(rows.length - st.limit) + '건 남음)')) : null;
+  return h('div', null, tools, wrap, more);
+}
+const hospLink = (k, name) => h('button', { class: 'hlink', type: 'button', onclick: e => { e.stopPropagation(); openHospital(k); }, text: name || hname(k) });
+const PLAIN_MARKS = ['o', 'x', 'y', 'n', 'v', 'yes', 'no', '완료', '미전달', '전달', '전달완료', '○', '×', '✓', '✔', '-'];
+function fsnStatusCell(r) {
+  const raw = (r.sr || '').trim();
+  const extra = raw && PLAIN_MARKS.indexOf(raw.toLowerCase()) < 0 ? h('span', { class: 'muted', text: ' · ' + (raw.length > 14 ? raw.slice(0, 14) + '…' : raw), title: raw }) : null;
+  return r.s ? h('span', { class: 'badge' }, dot('var(--done)'), '완료', extra)
+    : h('span', { class: 'badge' }, dot('var(--todo)'), h('span', { class: 'bad', text: '미전달' }), extra);
+}
+function bandCell(r) { return h('span', { class: 'badge' }, dot(BAND[r.b].color), BAND[r.b].label); }
+function bandBadges(a) {
+  return BAND_KEYS.filter(k => a[k]).map(k => h('span', { class: 'badge', title: BAND[k].label }, dot(BAND[k].color), BAND[k].label + ' ' + a[k]));
+}
+function openHospital(k) { S.hsel = k; setTab('hosp'); window.scrollTo(0, 0); }
+function goFsn(patch) { Object.assign(S, patch); setTab('fsn'); }
+function goFco(patch) { Object.assign(S, patch); setTab('fco'); }
+function unavailable(kind) {
+  if (kind === 'fsn') {
+    return h('div', { class: 'card' }, h('h3', { text: '고객안내문 데이터를 읽지 못했습니다' }),
+      h('p', { class: 'sub', text: (D.fsn && D.fsn.error) || '파일이 없습니다.' }),
+      h('p', { class: 'note', text: '데이터 정보 탭에서 시트/컬럼 인식 결과를 확인할 수 있습니다.' }));
+  }
+  return h('div', { class: 'card' }, h('h3', { text: 'FCO 데이터가 없습니다' }),
+    h('p', { class: 'sub', text: 'FCO 파일 주소가 설정되지 않았고, 기존 FCO 프로그램이 받아 둔 파일도 없습니다.' }),
+    h('p', { class: 'note', text: '기존 FCO 프로그램(FCO.exe)을 한 번 실행하면 그 파일을 자동으로 함께 사용합니다.' }));
+}
+
+/* ======================= tabs ======================= */
+const TABS = [
+  ['overview', '통합 개요'],
+  ['fsn', '고객안내문 (FSN)'],
+  ['fco', 'FCO'],
+  ['hosp', '병원별 현황'],
+  ['info', '데이터 정보'],
+];
+function setTab(t) { S.tab = t; store.set('tab', t); render(); }
+
+/* ---------- 통합 개요 ---------- */
+function viewOverview() {
+  const fr = fsnBase(), cr = fcoBase();
+  const fs = fsnStats(fr), bc = bandCounts(cr);
+  const out = [];
+  out.push(h('div', { class: 'section-title', text: '한눈에 보기' }));
+  out.push(h('div', { class: 'kpis' },
+    FSN_OK ? kpi({ hero: true, label: '고객안내문 전달률', value: fs.rate + '%', meter: fs.rate, sub: '완료 ' + fmt(fs.done) + ' / 대상 ' + fmt(fs.total) + '건 · 병원 ' + fmt(fs.hosp) + '곳', onClick: () => goFsn({}) })
+      : kpi({ hero: true, label: '고객안내문 전달률', value: '—', sub: '고객안내문 데이터 없음' }),
+    kpi({ label: '고객안내문 미전달', value: FSN_OK ? fmt(fs.todo) + '건' : '—', sub: FSN_OK ? '병원 ' + fmt(fs.todoHosp) + '곳' : '', swatch: 'var(--todo)', onClick: FSN_OK ? () => goFsn({ fsnOnly: 'todo' }) : null }),
+    ['r', 'o', 'g'].map(k => kpi({ label: 'FCO ' + BAND[k].label, value: FCO_OK ? fmt(bc[k]) + '건' : '—', swatch: BAND[k].color, sub: k === 'r' ? '마감 6개월 이내 (지난 것 포함)' : k === 'o' ? '마감 6개월~1년' : '마감 1년 이후', onClick: FCO_OK ? () => goFco({ band: k }) : null }))));
+
+  const cards = h('div', { class: 'cards' });
+  if (FSN_OK) {
+    const useBu = FSN_HAS.bu;
+    const items = useBu ? groupFsn(fr, buLabel) : groupFsn(fr, crLabel);
+    cards.append(h('div', { class: 'card' },
+      h('h3', { text: useBu ? 'BU별 고객안내문 전달' : 'C&R별 고객안내문 전달' }),
+      h('p', { class: 'sub', text: '막대를 누르면 고객안내문 탭에서 자세히 봅니다.' }),
+      FSN_LEGEND(),
+      completionList(items, { id: 'ov-fsn', limit: 8, onClick: key => useBu ? goFsn({ bu: key === '(BU 없음)' ? '' : key }) : goFsn({ cr: key }) })));
+  } else cards.append(unavailable('fsn'));
+  if (FCO_OK) {
+    cards.append(h('div', { class: 'card' },
+      h('h3', { text: '소스별 남은 FCO' }),
+      h('p', { class: 'sub', text: 'Closed 제외 · 마감일(Due Date) 기준 구간' }),
+      BAND_LEGEND(),
+      bandList(groupBand(cr, r => r.src), { id: 'ov-fco', onClick: key => goFco({ src: key }) })));
+  } else cards.append(unavailable('fco'));
+  out.push(cards);
+
+  const agg = hospAgg(fr, cr).filter(a => a.fsnTodo > 0 || a.r > 0).sort(prioSort);
+  out.push(h('div', { class: 'section-title' }, '우선 확인 병원', h('span', { class: 'hint', text: '고객안내문 미전달 또는 FCO 마감 6개월 미만이 있는 병원 · 행을 누르면 병원별 현황으로 이동' })));
+  out.push(dataTable({
+    id: 'ov-prio', rows: agg, csv: '우선확인병원', onRow: a => openHospital(a.k),
+    countText: n => '병원 ' + fmt(n) + '곳',
+    empty: '우선 확인이 필요한 병원이 없습니다.',
+    columns: [
+      { key: 'name', label: '병원', get: a => a.name, cell: a => hospLink(a.k, a.name) },
+      { key: 'pp', label: '담당자', get: a => Array.from(new Set([...a.fse, ...a.sales])).join(', '), clip: true },
+      { key: 'todo', label: '안내문 미전달', num: true, get: a => a.fsnTodo, cell: a => a.fsnTodo ? h('span', { class: 'bad', text: fmt(a.fsnTodo) }) : '0', when: () => FSN_OK },
+      { key: 'tot', label: '안내문 대상', num: true, get: a => a.fsnTotal, when: () => FSN_OK },
+      { key: 'r', label: 'FCO 6개월 미만', num: true, get: a => a.r, when: () => FCO_OK },
+      { key: 'o', label: 'FCO 1년 미만', num: true, get: a => a.o, when: () => FCO_OK },
+      { key: 'g', label: 'FCO 1년 이상', num: true, get: a => a.g, when: () => FCO_OK },
+    ],
+  }));
+  return out;
+}
+
+/* ---------- 고객안내문 ---------- */
+function viewFsn() {
+  if (!FSN_OK) return [unavailable('fsn')];
+  const base = fsnBase();
+  const rows = fsnTabRows();
+  const fs = fsnStats(rows);
+  const out = [];
+
+  const sub = h('div', { class: 'subfilters' });
+  if (FSN_HAS.fsn) sub.append(selectBox('FSN', S.fsnId, uniqSorted(base.map(fsnLabel)), v => { S.fsnId = v; render(); }));
+  if (FSN_HAS.cr) sub.append(selectBox('C&R', S.cr, uniqSorted(base.map(crLabel)), v => { S.cr = v; render(); }));
+  sub.append(selectBox('전달방법', S.method, uniqSorted(base.map(methodLabel)), v => { S.method = v; render(); }));
+  out.push(sub);
+
+  out.push(h('div', { class: 'kpis' },
+    kpi({ hero: true, label: '전달률', value: fs.rate + '%', meter: fs.rate, sub: '완료 ' + fmt(fs.done) + ' / 대상 ' + fmt(fs.total) + '건' }),
+    kpi({ label: '대상', value: fmt(fs.total) + '건', sub: '병원 ' + fmt(fs.hosp) + '곳' }),
+    kpi({ label: '전달 완료', value: fmt(fs.done) + '건', swatch: 'var(--done)', onClick: () => { S.fsnOnly = 'done'; S.fsnView = 'rows'; render(); scrollToId('fsn-table'); }, active: S.fsnOnly === 'done' && S.fsnView === 'rows' }),
+    kpi({ label: '미전달', value: fmt(fs.todo) + '건', swatch: 'var(--todo)', sub: '병원 ' + fmt(fs.todoHosp) + '곳', onClick: () => { S.fsnOnly = 'todo'; render(); scrollToId('fsn-table'); }, active: S.fsnOnly === 'todo' })));
+
+  const cards = h('div', { class: 'cards' });
+  const card = (title, subText, content) => h('div', { class: 'card' }, h('h3', { text: title }), h('p', { class: 'sub', text: subText }), FSN_LEGEND(), content);
+  if (FSN_HAS.bu) cards.append(card('BU별', '누르면 BU 필터 적용', completionList(groupFsn(rows, buLabel), { id: 'fsn-bu', active: S.bu, onClick: k => { S.bu = S.bu === k ? '' : (k === '(BU 없음)' ? '' : k); render(); } })));
+  if (FSN_HAS.cr) cards.append(card('C&R별', '미전달이 많은 순', completionList(groupFsn(rows, crLabel), { id: 'fsn-cr', active: S.cr, onClick: k => { S.cr = S.cr === k ? '' : k; render(); } })));
+  cards.append(card('전달방법별', '등기 · 직접전달 · 이메일', completionList(groupFsn(rows, methodLabel), { id: 'fsn-m', active: S.method, onClick: k => { S.method = S.method === k ? '' : k; render(); } })));
+  if (FSN_HAS.fsn && !FSN_HAS.cr) cards.append(card('FSN별', '미전달이 많은 순', completionList(groupFsn(rows, fsnLabel), { id: 'fsn-id', active: S.fsnId, onClick: k => { S.fsnId = S.fsnId === k ? '' : k; render(); } })));
+  if (FSN_HAS.fse) cards.append(card('담당 FSE별', '누르면 담당자 필터 적용', completionList(groupFsn(rows, r => r._fse.length ? r._fse : ['(미지정)']), { id: 'fsn-fse', active: S.person, onClick: k => { if (k !== '(미지정)') { S.person = S.person === k ? '' : k; render(); } } })));
+  if (FSN_HAS.sales) cards.append(card('영업 담당별', '누르면 담당자 필터 적용', completionList(groupFsn(rows, r => r._sales.length ? r._sales : ['(미지정)']), { id: 'fsn-sales', active: S.person, onClick: k => { if (k !== '(미지정)') { S.person = S.person === k ? '' : k; render(); } } })));
+  if (!FSN_HAS.fse && !FSN_HAS.sales && FCO_OK) {
+    cards.append(card('담당 FSE별 (FCO 기준)', '고객안내문 파일에 담당자가 없어 FCO 파일의 병원별 FSE로 묶음',
+      completionList(groupFsn(rows, r => (H[r.k] && H[r.k].pp.length) ? H[r.k].pp : ['(미지정)']), { id: 'fsn-fcofse', active: S.person, onClick: k => { if (k !== '(미지정)') { S.person = S.person === k ? '' : k; render(); } } })));
+  }
+  out.push(cards);
+
+  // 표
+  out.push(h('div', { class: 'section-title', id: 'fsn-table' }, S.fsnOnly === 'todo' ? '아직 전달이 필요한 병원' : S.fsnOnly === 'done' ? '전달 완료' : '전체 목록'));
+  const filtered = rows.filter(r => S.fsnOnly === 'all' || (S.fsnOnly === 'todo' ? !r.s : r.s));
+  const tools = [
+    segCtl([['todo', '미전달'], ['done', '완료'], ['all', '전체']], S.fsnOnly, v => { S.fsnOnly = v; render(); }, '상태'),
+    segCtl([['hosp', '병원별'], ['rows', '건별']], S.fsnView, v => { S.fsnView = v; render(); }, '보기'),
+  ];
+  if (S.fsnView === 'hosp') {
+    const agg = hospAgg(filtered, []).map(a => {
+      const all = rows.filter(r => r.k === a.k);
+      a.allTotal = all.length; a.allTodo = all.filter(r => !r.s).length;
+      return a;
+    }).sort(prioSort);
+    out.push(dataTable({
+      id: 'fsn-hosp', rows: agg, tools, csv: '고객안내문_병원별', onRow: a => openHospital(a.k),
+      countText: n => '병원 ' + fmt(n) + '곳',
+      columns: [
+        { key: 'name', label: '병원', get: a => a.name, cell: a => hospLink(a.k, a.name) },
+        { key: 'bu', label: S.fsnOnly === 'todo' ? '미전달 BU' : 'BU', get: a => Array.from(a.bus).join(', '), when: () => FSN_HAS.bu },
+        { key: 'todo', label: '미전달', num: true, get: a => a.allTodo, cell: a => a.allTodo ? h('span', { class: 'bad', text: fmt(a.allTodo) }) : '0' },
+        { key: 'tot', label: '대상', num: true, get: a => a.allTotal },
+        { key: 'rate', label: '전달률', num: true, get: a => pct(a.allTotal - a.allTodo, a.allTotal), cell: a => pct(a.allTotal - a.allTodo, a.allTotal) + '%' },
+        { key: 'cr', label: '미전달 C&R', get: a => Array.from(a.crs).join(', '), clip: true, when: () => FSN_HAS.cr },
+        { key: 'fsn', label: '미전달 FSN', get: a => Array.from(a.fsns).join(', '), clip: true, when: () => FSN_HAS.fsn },
+        { key: 'fse', label: 'FSE', get: a => Array.from(a.fse).join(', '), clip: true, when: () => FSN_HAS.fse },
+        { key: 'sales', label: '영업', get: a => Array.from(a.sales).join(', '), clip: true, when: () => FSN_HAS.sales },
+        { key: 'm', label: S.fsnOnly === 'todo' ? '전달방법 (예정)' : '전달방법', get: a => Array.from(a.methods).join(', ') },
+      ],
+    }));
+  } else {
+    out.push(dataTable({
+      id: 'fsn-rows', rows: filtered, tools, csv: '고객안내문_건별', sort: 'h',
+      columns: fsnRowColumns(true),
+    }));
+  }
+  return out;
+}
+function fsnRowColumns(withHosp) {
+  return [
+    { key: 'h', label: '병원', get: r => r.h, cell: r => hospLink(r.k, r.h), when: () => withHosp },
+    { key: 'site', label: 'Site', get: r => r.site, when: () => FSN_HAS.site },
+    { key: 'bu', label: 'BU', get: r => r.bu, nowrap: true, when: () => FSN_HAS.bu },
+    { key: 'cr', label: 'C&R', get: r => r.cr, when: () => FSN_HAS.cr },
+    { key: 'fsn', label: 'FSN', get: r => r.fsn, when: () => FSN_HAS.fsn },
+    { key: 'ft', label: '제목', get: r => r.ft, clip: true, when: () => FSN_HAS.ft },
+    { key: 'sys', label: '장비', get: r => r.sys, when: () => FSN_HAS.sys },
+    { key: 'sn', label: 'S/N', get: r => r.sn, nowrap: true, when: () => FSN_HAS.sn },
+    { key: 'fse', label: 'FSE', get: r => r.fse, when: () => FSN_HAS.fse },
+    { key: 'sales', label: '영업', get: r => r.sales, when: () => FSN_HAS.sales },
+    { key: 's', label: '상태', get: r => (r.s ? '완료' : '미전달') + (r.sr ? ' (' + r.sr + ')' : ''), sortVal: r => r.s, cell: fsnStatusCell, nowrap: true },
+    { key: 'm', label: '전달방법', get: r => r.m || r.mr, nowrap: true },
+    { key: 'd', label: '전달일', get: r => r.d, nowrap: true, when: () => FSN_HAS.d },
+    { key: 'rp', label: '회신', get: r => r.rp, when: () => FSN_HAS.rp },
+    { key: 'fco', label: '관련 FCO', get: r => r.fco, when: () => FSN_HAS.fco },
+    { key: 'rm', label: '비고', get: r => r.rm, clip: true, when: () => FSN_HAS.rm },
+    { key: 'row', label: '엑셀 행', num: true, get: r => r.row, sortVal: r => (r.sheet || '') + String(r.row).padStart(6, '0'), cell: r => (D.fsn.sheets && D.fsn.sheets.filter(s => s.used).length > 1 ? r.sheet + ' ' : '') + r.row },
+  ];
+}
+
+/* ---------- FCO ---------- */
+function viewFco() {
+  if (!FCO_OK) return [unavailable('fco')];
+  const base = fcoBase();
+  const rows = fcoTabRows();
+  const bc = bandCounts(base.filter(r => (!S.src || r.src === S.src) && (!S.rel || r.rel)));
+  const out = [];
+  const sub = h('div', { class: 'subfilters' },
+    selectBox('소스', S.src, uniqSorted(FCO.map(r => r.src)), v => { S.src = v; render(); }),
+    selectBox('마감 구간', S.band, BAND_KEYS.filter(k => k !== 'n' || HAS_BAND_N).map(k => [k, BAND[k].label]), v => { S.band = v; render(); }),
+    h('div', { class: 'f' }, h('span', { text: '고객안내문' }),
+      h('label', { class: 'check' },
+        h('input', { type: 'checkbox', checked: S.rel, onchange: e => { S.rel = e.target.checked; render(); } }), '고객안내문 관련 FCO만')));
+  out.push(sub);
+  out.push(h('div', { class: 'kpis' },
+    kpi({ hero: true, label: '남은 FCO (Closed 제외)', value: fmt(bc.total) + '건', sub: '병원 ' + fmt(new Set(base.filter(r => (!S.src || r.src === S.src) && (!S.rel || r.rel)).map(r => r.k)).size) + '곳', onClick: () => { S.band = ''; render(); } }),
+    BAND_KEYS.filter(k => k !== 'n' || HAS_BAND_N).map(k => kpi({ label: BAND[k].label, value: fmt(bc[k]) + '건', swatch: BAND[k].color, active: S.band === k, onClick: () => { S.band = S.band === k ? '' : k; render(); } }))));
+  const cards = h('div', { class: 'cards' },
+    h('div', { class: 'card' }, h('h3', { text: '소스별' }), h('p', { class: 'sub', text: '누르면 소스 필터 적용' }), BAND_LEGEND(),
+      bandList(groupBand(rows, r => r.src), { id: 'fco-src', active: S.src, onClick: k => { S.src = S.src === k ? '' : k; render(); } })),
+    h('div', { class: 'card' }, h('h3', { text: 'FSE별' }), h('p', { class: 'sub', text: '6개월 미만이 많은 순 · 누르면 담당자 필터 적용' }), BAND_LEGEND(),
+      bandList(groupBand(rows, r => r.pp.length ? r.pp : ['(미지정)']), { id: 'fco-fse', active: S.person, onClick: k => { if (k !== '(미지정)') { S.person = S.person === k ? '' : k; render(); } } })));
+  out.push(cards);
+  out.push(h('div', { class: 'section-title', text: 'FCO 목록' }));
+  out.push(dataTable({ id: 'fco-rows', rows, csv: 'FCO_목록', sort: 'due', dir: 1, columns: fcoColumns(true) }));
+  return out;
+}
+function fcoColumns(withHosp) {
+  return [
+    { key: 'fco', label: 'FCO', get: r => r.fco, nowrap: true },
+    { key: 'due', label: 'Due Date', get: r => r.due, nowrap: true },
+    { key: 'dd', label: '남은 기간', num: true, get: r => ddayText(r.dd), sortVal: r => r.dd, cell: r => r.dd != null && r.dd < 0 ? h('span', { class: 'bad', text: ddayText(r.dd) + ' 지남' }) : ddayText(r.dd) },
+    { key: 'b', label: '구간', get: r => BAND[r.b].label, sortVal: r => BAND_KEYS.indexOf(r.b), cell: bandCell, nowrap: true },
+    { key: 'src', label: '소스', get: r => r.src, nowrap: true },
+    { key: 'h', label: '병원 (Account)', get: r => r.h, cell: r => hospLink(r.k, r.h), when: () => withHosp },
+    { key: 'site', label: 'Site', get: r => r.site },
+    { key: 't', label: 'FCO Title', get: r => r.t, clip: true },
+    { key: 'sys', label: 'System', get: r => r.sys, clip: true },
+    { key: 'sn', label: 'SN', get: r => r.sn, nowrap: true },
+    { key: 'fse', label: 'FSE', get: r => r.fse, nowrap: true },
+    { key: 'ap', label: 'Action Plan', get: r => r.ap, clip: true },
+    { key: 'st', label: 'Status', get: r => r.st, nowrap: true },
+    { key: 'rel', label: '고객안내문 관련', get: r => r.rel, clip: true, when: () => has(FCO, 'rel') },
+    { key: 'wo', label: 'WO', get: r => r.wo, nowrap: true, when: () => has(FCO, 'wo') },
+    { key: 'case', label: 'Case', get: r => r.case, nowrap: true, when: () => has(FCO, 'case') },
+    { key: 'rm', label: 'Remark', get: r => r.rm, clip: true, when: () => has(FCO, 'rm') },
+  ];
+}
+
+/* ---------- 병원별 ---------- */
+function viewHosp() {
+  const fr = fsnBase(false), cr = fcoBase(false);
+  let agg = hospAgg(fr, cr);
+  if (S.q) {
+    const hitK = new Set(fsnBase(true).map(r => r.k).concat(fcoBase(true).map(r => r.k)));
+    const q = S.q.toLowerCase();
+    agg = agg.filter(a => hitK.has(a.k) || a.name.toLowerCase().indexOf(q) >= 0);
+  }
+  if (S.hOnly === 'todo') agg = agg.filter(a => a.fsnTodo > 0);
+  if (S.hOnly === 'r') agg = agg.filter(a => a.r > 0);
+  agg.sort(S.hsort === 'name' ? (a, b) => a.name.localeCompare(b.name, 'ko') : prioSort);
+  if (S.hsel && !agg.some(a => a.k === S.hsel) && agg.length) S.hsel = null;
+  if (!S.hsel && agg.length) S.hsel = agg[0].k;
+
+  const limit = S.expand['hlist'] ? agg.length : 300;
+  const listItems = h('div', { class: 'hlist-items' }, agg.slice(0, limit).map(a => h('button', {
+    class: 'hitem', type: 'button', 'aria-current': String(a.k === S.hsel), onclick: () => { S.hsel = a.k; render(); },
+  },
+    h('span', { class: 'nm', text: a.name }),
+    (a.fse.size || a.sales.size) ? h('span', { class: 'pp', text: Array.from(new Set([...a.fse, ...a.sales])).join(', ') }) : null,
+    h('span', { class: 'bd' },
+      a.fsnTotal ? (a.fsnTodo ? h('span', { class: 'badge' }, dot('var(--todo)'), '안내문 미전달 ' + a.fsnTodo + '/' + a.fsnTotal)
+        : h('span', { class: 'badge' }, dot('var(--done)'), '안내문 완료 ' + a.fsnTotal)) : null,
+      (a.r + a.o + a.g + a.n) ? h('span', { class: 'badge' }, 'FCO', BAND_KEYS.filter(k => a[k]).map(k => h('span', { class: 'badge', style: 'margin-left:6px' }, dot(BAND[k].color), String(a[k])))) : null))));
+  const list = h('div', { class: 'hlist' },
+    h('div', { class: 'hlist-head' },
+      h('div', { style: 'display:flex;justify-content:space-between;align-items:center;gap:8px' },
+        h('b', { text: '병원 ' + fmt(agg.length) + '곳' }),
+        segCtl([['prio', '우선순위'], ['name', '이름순']], S.hsort, v => { S.hsort = v; render(); }, '정렬')),
+      segCtl([['', '전체'], ['todo', '안내문 미전달'], ['r', 'FCO 6개월 미만']], S.hOnly, v => { S.hOnly = v; render(); }, '조건')),
+    agg.length ? listItems : h('div', { class: 'empty', style: 'padding:14px', text: '조건에 맞는 병원이 없습니다.' }),
+    agg.length > 300 ? h('div', { style: 'padding:8px 12px' }, moreToggle('hlist', agg.length, 300)) : null);
+
+  const detail = h('div', { class: 'hdetail' });
+  if (S.hsel) {
+    const k = S.hsel, hh = H[k] || { name: k, pp: [], names: [] };
+    const frs = fr.filter(r => r.k === k), crs = cr.filter(r => r.k === k);
+    const fs = fsnStats(frs), bc = bandCounts(crs);
+    const fse = uniqSorted(frs.flatMap(r => r._fse).concat(crs.flatMap(r => r.pp)));
+    const sales = uniqSorted(frs.flatMap(r => r._sales));
+    const others = (hh.names || []).filter(n => n !== hh.name);
+    detail.append(h('div', { class: 'card' },
+      h('h2', { text: hh.name }),
+      others.length ? h('div', { class: 'aliases', text: '다른 표기: ' + others.join(', ') }) : null,
+      h('dl', { class: 'kv', style: 'margin-top:10px' },
+        fse.length ? [h('dt', { text: 'FSE' }), h('dd', { text: fse.join(', ') })] : null,
+        sales.length ? [h('dt', { text: '영업' }), h('dd', { text: sales.join(', ') })] : null),
+      h('div', { class: 'mini-kpis' },
+        FSN_OK ? h('div', null, h('span', { class: 'l' }, '고객안내문'), h('span', { class: 'v', text: frs.length ? (fs.todo ? '미전달 ' + fs.todo : '모두 완료') : '대상 아님' }), h('span', { class: 'l', text: frs.length ? '완료 ' + fs.done + ' / 대상 ' + fs.total : '' })) : null,
+        FCO_OK ? BAND_KEYS.filter(b => b !== 'n' || bc.n).map(b => h('div', null, h('span', { class: 'l' }, sw(BAND[b].color), 'FCO ' + BAND[b].label), h('span', { class: 'v', text: fmt(bc[b]) }))) : null)));
+    if (FSN_OK) {
+      detail.append(h('div', { class: 'card' }, h('h3', { text: '고객안내문 (FSN)' }), h('p', { class: 'sub', text: frs.length ? '미전달 건이 위에 보입니다.' : '이 병원은 고객안내문 대상 목록에 없습니다.' }),
+        frs.length ? dataTable({ id: 'h-fsn', rows: frs, sort: 's', dir: 1, csv: '고객안내문_' + hh.name, columns: fsnRowColumns(false) }) : null));
+    }
+    if (FCO_OK) {
+      detail.append(h('div', { class: 'card' }, h('h3', { text: 'FCO' }), h('p', { class: 'sub', text: crs.length ? '마감일 빠른 순' : '남은 FCO가 없습니다.' }),
+        crs.length ? dataTable({ id: 'h-fco', rows: crs, sort: 'due', dir: 1, csv: 'FCO_' + hh.name, columns: fcoColumns(false) }) : null));
+    }
+  } else {
+    detail.append(h('div', { class: 'card empty', text: '왼쪽에서 병원을 선택하세요.' }));
+  }
+  return [h('div', { class: 'hosp-layout' }, list, detail)];
+}
+
+/* ---------- 데이터 정보 ---------- */
+const FIELD_KO = {
+  hospital: '병원', site: 'Site', bu: 'BU', cr: 'C&R', fsn: 'FSN 번호', fsn_title: 'FSN 제목', fco: '관련 FCO',
+  method: '전달방법', status: '전달여부', date: '전달일', reply: '회신', fse: 'FSE', sales: '영업', sn: 'S/N',
+  system: '장비', region: '지역', remark: '비고',
+  due: 'Due Date', title: 'FCO Title', sysdesc: 'System Code Description', syscode: 'System Code', account: 'Account',
+  case: 'Case', wo: 'WO', ap: 'Action Plan', rel: '고객안내문 관련',
+};
+const FCO_FIELD_KO = {
+  fco: 'FCO', due: 'Due Date', title: 'FCO Title', sysdesc: 'System Code Description', syscode: 'System Code', sn: 'SN',
+  account: 'Account', site: 'Site', case: 'Case', wo: 'WO', region: 'Region', fse: 'FSE', ap: 'Action Plan',
+  status: 'Status', rel: '고객안내문 관련', remark: 'Remark',
+};
+const STATE_KO = { done: '완료', todo: '미전달', excluded: '집계 제외', unknown: '해석 못함 → 미전달', empty: '빈칸' };
+function simpleTable(head, rows) {
+  return h('div', { class: 'tbl-wrap', style: 'max-height:none' }, h('table', null,
+    h('thead', null, h('tr', null, head.map(t => h('th', { text: t, style: 'cursor:default' })))),
+    h('tbody', null, rows.map(r => h('tr', null, r.map(c => h('td', null, c)))))));
+}
+function fileState(f) {
+  if (!f || !f.name) return '없음';
+  return f.stale ? '⚠ 이전 파일' : (f.origin || '사용');
+}
+function viewInfo() {
+  const out = [];
+  out.push(h('div', { class: 'card' },
+    h('h3', { text: '이 화면의 용도' }),
+    h('p', { class: 'sub', style: 'margin:0', text: '엑셀 파일에서 어떤 시트와 컬럼을 읽었는지 보여줍니다. 숫자가 이상하면 이 화면을 캡처해서 보내 주세요. 컬럼 인식을 바로 고칠 수 있습니다.' })));
+
+  out.push(h('div', { class: 'section-title', text: '사용한 파일' }));
+  const fileRows = [];
+  if (D.fsn) fileRows.push(['고객안내문', (D.fsn.file && D.fsn.file.name) || '-', (D.fsn.file && D.fsn.file.time) || '-', fileState(D.fsn.file), FSN_OK ? fmt(FSN.length) + '건' : (D.fsn.error || '실패')]);
+  (D.fco.sources || []).forEach(s => fileRows.push(['FCO ' + s.name, (s.file && s.file.name) || '-', (s.file && s.file.time) || '-', fileState(s.file), s.ok ? fmt(s.count) + '건 (Closed ' + fmt(s.closed) + '건 제외)' : (s.error || '없음')]));
+  out.push(simpleTable(['구분', '파일', '파일 시각', '상태', '결과'], fileRows));
+
+  if (D.fsn && D.fsn.warnings && D.fsn.warnings.length) {
+    out.push(h('div', { class: 'section-title', text: '확인이 필요한 점' }));
+    out.push(h('div', { class: 'card' }, h('ul', { class: 'warnlist' }, D.fsn.warnings.map(w => h('li', { text: w })))));
+  }
+
+  const cards = h('div', { class: 'cards' });
+  const fields = (D.fsn && D.fsn.fields) || {};
+  cards.append(h('div', { class: 'card' }, h('h3', { text: '고객안내문 컬럼 인식' }), h('p', { class: 'sub', text: '프로그램 항목 ← 엑셀 컬럼 이름' }),
+    Object.keys(fields).length ? simpleTable(['항목', '엑셀 컬럼'], Object.keys(fields).map(k => [FIELD_KO[k] || k, fields[k]])
+      .concat(Object.keys(D.fsn.wide || {}).map(k => ['전달방법 (' + D.fsn.wide[k] + ')', k]))) : h('div', { class: 'empty', text: '인식된 컬럼이 없습니다.' })));
+  cards.append(h('div', { class: 'card' }, h('h3', { text: '고객안내문 시트' }), h('p', { class: 'sub', text: '데이터를 읽은 시트와 건너뛴 이유' }),
+    simpleTable(['시트', '사용', '헤더 행', '읽은 행', '비고'], ((D.fsn && D.fsn.sheets) || []).map(s => [s.name, s.used ? '✓' : '', s.header_row || '', s.used ? fmt(s.rows) : '', s.reason || '']))));
+  if (D.fsn && D.fsn.statusValues && D.fsn.statusValues.length) {
+    cards.append(h('div', { class: 'card' }, h('h3', { text: '전달여부 값 → 판정' }), h('p', { class: 'sub', text: '엑셀에 적힌 값을 완료/미전달로 어떻게 읽었는지' }),
+      simpleTable(['엑셀 값', '판정', '건수'], D.fsn.statusValues.map(v => [v.value, STATE_KO[v.state] || v.state, fmt(v.count)]))));
+  }
+  if (D.fsn && D.fsn.methodValues && D.fsn.methodValues.length) {
+    cards.append(h('div', { class: 'card' }, h('h3', { text: '전달방법 값 → 분류' }), h('p', { class: 'sub', text: '등기 / 직접전달 / 이메일로 묶은 결과' }),
+      simpleTable(['엑셀 값', '분류', '건수'], D.fsn.methodValues.map(v => [v.value, v.canon, fmt(v.count)]))));
+  }
+  (D.fco.sources || []).filter(s => s.ok).forEach(s => {
+    cards.append(h('div', { class: 'card' }, h('h3', { text: 'FCO ' + s.name + ' 컬럼 인식' }), h('p', { class: 'sub', text: '시트: ' + s.sheet }),
+      simpleTable(['항목', '엑셀 컬럼'], Object.keys(s.fields).map(k => [FCO_FIELD_KO[k] || k, s.fields[k]]))));
+  });
+  out.push(h('div', { class: 'section-title', text: '인식 결과' }));
+  out.push(cards);
+
+  out.push(h('div', { class: 'section-title', text: '고객안내문 ↔ FCO 연결' }));
+  out.push(h('div', { class: 'card' }, h('dl', { class: 'kv' },
+    h('dt', { text: '양쪽에 모두 있는 병원' }), h('dd', { text: fmt(D.link.matchedHospitals) + '곳' }),
+    h('dt', { text: 'S/N으로 연결한 행' }), h('dd', { text: fmt(D.link.linkedBySn) + '건 (병원명이 달라도 장비 S/N이 같으면 같은 병원으로 묶음)' }),
+    h('dt', { text: '집계 제외 (해당없음 등)' }), h('dd', { text: fmt(D.fsn.excluded || 0) + '건' }),
+    h('dt', { text: '병원명 없는 행' }), h('dd', { text: fmt(D.fsn.skipped || 0) + '건 (건너뜀)' }))));
+  return out;
+}
+
+/* ======================= render ======================= */
+function scrollToId(id) { setTimeout(() => { const e = document.getElementById(id); if (e) e.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 30); }
+
+function renderFilters() {
+  const ppl = uniqSorted(Object.values(H).flatMap(x => x.pp || []));
+  const selP = document.getElementById('fPerson');
+  setKids(selP, h('option', { value: '', text: '전체 (' + ppl.length + '명)' }), ppl.map(p => h('option', { value: p, text: p })));
+  selP.value = S.person;
+  let bus = uniqSorted(FSN.map(r => r.bu));
+  if (!bus.length) bus = uniqSorted(FCO.map(r => r.src));
+  const selB = document.getElementById('fBu');
+  setKids(selB, h('option', { value: '', text: '전체' }), bus.map(b => h('option', { value: b, text: b })));
+  selB.value = S.bu;
+  const q = document.getElementById('fQ');
+  if (q.value !== S.q) q.value = S.q;
+
+  const chips = [];
+  const chip = (label, clear) => h('span', { class: 'chip' }, label, h('button', { type: 'button', 'aria-label': label + ' 해제', onclick: () => { clear(); render(); }, text: '×' }));
+  if (S.person) chips.push(chip('담당자: ' + S.person, () => S.person = ''));
+  if (S.bu) chips.push(chip('BU: ' + S.bu, () => S.bu = ''));
+  if (S.q) chips.push(chip('검색: ' + S.q, () => S.q = ''));
+  if (S.tab === 'fsn') {
+    if (S.fsnId) chips.push(chip('FSN: ' + S.fsnId, () => S.fsnId = ''));
+    if (S.cr) chips.push(chip('C&R: ' + S.cr, () => S.cr = ''));
+    if (S.method) chips.push(chip('전달방법: ' + S.method, () => S.method = ''));
+  }
+  if (S.tab === 'fco') {
+    if (S.src) chips.push(chip('소스: ' + S.src, () => S.src = ''));
+    if (S.band) chips.push(chip('구간: ' + BAND[S.band].label, () => S.band = ''));
+    if (S.rel) chips.push(chip('고객안내문 관련만', () => S.rel = false));
+  }
+  const af = document.getElementById('activeFilters');
+  setKids(af, chips.length ? [h('span', { text: '적용 중:' }), chips] : []);
+}
+function renderTabs() {
+  const nav = document.getElementById('tabs');
+  const fs = fsnStats(fsnBase()), fc = fcoBase().length;
+  const counts = { fsn: FSN_OK ? '미전달 ' + fmt(fs.todo) : '', fco: FCO_OK ? fmt(fc) + '건' : '' };
+  setKids(nav, TABS.map(([id, label]) => h('button', {
+    class: 'tab', role: 'tab', type: 'button', 'aria-selected': String(S.tab === id), onclick: () => setTab(id),
+  }, label, counts[id] ? h('span', { class: 'cnt', text: counts[id] }) : null)));
+}
+function render() {
+  if (!TABS.some(t => t[0] === S.tab)) S.tab = 'overview';
+  renderFilters();
+  renderTabs();
+  const main = document.getElementById('main');
+  const views = { overview: viewOverview, fsn: viewFsn, fco: viewFco, hosp: viewHosp, info: viewInfo };
+  let content;
+  try { content = views[S.tab](); }
+  catch (e) { content = [h('div', { class: 'card' }, h('h3', { text: '화면을 그리는 중 오류가 발생했습니다' }), h('pre', { style: 'white-space:pre-wrap', text: String(e && e.stack || e) }))]; }
+  setKids(main, content);
+  tip.hidden = true;
+}
+
+function renderHeader() {
+  const parts = ['기준 ' + D.generated];
+  if (D.fsn && D.fsn.file && D.fsn.file.name) parts.push('고객안내문 ' + D.fsn.file.time);
+  const fcoT = (D.fco.sources || []).filter(s => s.ok).map(s => s.name + ' ' + ((s.file && s.file.time) || '').slice(5));
+  if (fcoT.length) parts.push('FCO ' + fcoT.join(', '));
+  document.getElementById('metaLine').textContent = parts.join(' · ');
+  const banners = [];
+  if (D.sample) banners.push('샘플 데이터로 만든 화면입니다. 실제 데이터가 아닙니다.');
+  if (D.fsn && D.fsn.file && D.fsn.file.stale) banners.push('⚠ 고객안내문 파일을 새로 받지 못해 ' + D.fsn.file.time + ' 파일로 보여줍니다.');
+  (D.fco.sources || []).filter(s => s.ok && s.file && s.file.stale).forEach(s => banners.push('⚠ FCO ' + s.name + '은(는) ' + s.file.time + ' 파일입니다 (오늘 받은 파일 아님).'));
+  if (D.fsn && D.fsn.warnings && D.fsn.warnings.length) banners.push('ⓘ 고객안내문 읽기 참고사항 ' + D.fsn.warnings.length + '개 — 데이터 정보 탭 확인');
+  setKids(document.getElementById('banner'), banners.map(b => h('div', { text: b })));
+  document.getElementById('foot').textContent = (D.app || '') + ' v' + (D.version || '') + ' · 생성 ' + D.generated;
+}
+
+/* theme */
+const THEMES = [['auto', '화면: 자동'], ['light', '화면: 밝게'], ['dark', '화면: 어둡게']];
+function applyTheme(t) {
+  if (t === 'auto') document.documentElement.removeAttribute('data-theme');
+  else document.documentElement.setAttribute('data-theme', t);
+  document.getElementById('themeBtn').textContent = (THEMES.find(x => x[0] === t) || THEMES[0])[1];
+}
+let theme = store.get('theme', 'auto');
+applyTheme(theme);
+document.getElementById('themeBtn').addEventListener('click', () => {
+  const i = THEMES.findIndex(x => x[0] === theme);
+  theme = THEMES[(i + 1) % THEMES.length][0];
+  store.set('theme', theme);
+  applyTheme(theme);
+});
+
+/* global filter events */
+document.getElementById('fPerson').addEventListener('change', e => { S.person = e.target.value; render(); });
+document.getElementById('fBu').addEventListener('change', e => { S.bu = e.target.value; render(); });
+let qTimer = null;
+document.getElementById('fQ').addEventListener('input', e => {
+  clearTimeout(qTimer);
+  qTimer = setTimeout(() => { S.q = e.target.value.trim(); render(); }, 200);
+});
+document.getElementById('fReset').addEventListener('click', () => {
+  Object.assign(S, { person: '', bu: '', q: '', cr: '', method: '', fsnId: '', src: '', band: '', rel: false, hOnly: '' });
+  render();
+});
+
+renderHeader();
+render();
+})();
+</script>
+</body>
+</html>
