@@ -143,7 +143,7 @@ def test_real_layout_korean_names():
     import openpyxl
     head = ["C&R#", "장비 ID", "장비코드(6NC/12NC)", "장비명", "일련번호(S/N)", "고객코드(향후 업데이트)",
             "영문병원명(업데이트예정)", "국문병원명", "고객명(국문)", "전달방법", "최초 발송일", "지역", "비고",
-            "수신확인서 (Y/N/NA)"]
+            "최종증빙 확인", "수신확인서 (Y/N/NA)"]
     with tempfile.TemporaryDirectory() as d:
         path = Path(d) / "real.xlsx"
         wb = openpyxl.Workbook()
@@ -155,11 +155,11 @@ def test_real_layout_korean_names():
             w = wb.create_sheet(title)
             w.append(head)
             w.append(["2026-PD-MR-004", "98162875", "782107", "Ingenia", "62030", "0", "DONGKOOK UNIV",
-                      "동국대학교병원", "", "등기", dt.date(2026, 9, 1), "Central", "", "Y"])
+                      "동국대학교병원", "", "등기", dt.date(2026, 9, 1), "Central", "", "O", "Y"])
             w.append(["2026-PD-MR-004", "98747245", "782107", "Ingenia", "62039", "0", "-",
-                      "-", "혜민병원", "직접전달", None, "Central", "", "N"])
+                      "-", "혜민병원", "직접전달", None, "Central", "", "증빙 스캔본", "N"])
             w.append(["2026-PD-MR-018", "100342128", "782107", "Ingenia", "62073", "0", "KOREA UNIV",
-                      "", "", "", None, "JR", "", "NA"])
+                      "", "", "", dt.date(2026, 9, 3), "JR", "", "", "NA"])
         wb.save(path)
         r = main.parse_fsn(path)
         assert r["ok"], r["error"]
@@ -172,8 +172,9 @@ def test_real_layout_korean_names():
         names = [x["h"] for x in r["rows"] if x["bu"] == "MR"]
         assert names == ["동국대학교병원", "혜민병원", "KOREA UNIV"], names
         assert {x["bu"] for x in r["rows"]} == {"MR", "CT"}
-        # 전달여부 컬럼이 없고 발송일 컬럼이 있으면 → 발송일이 있어야 완료
-        assert [x["s"] for x in r["rows"] if x["bu"] == "MR"] == [1, 0, 0]
+        # 완료 = 최종증빙 확인 칸에 값이 있음 (발송일만 있고 증빙이 비면 미전달)
+        assert r["fields"]["status"] == "최종증빙 확인", r["fields"]
+        assert [x["s"] for x in r["rows"] if x["bu"] == "MR"] == [1, 1, 0]
 
 
 def test_pipeline_manual_file():

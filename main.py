@@ -241,7 +241,8 @@ FSN_FIELDS = [
                "통보방법", "방법", "Delivery Method", "Method", "Delivery Type"],
         contains=["방법", "방식", "수단", "method"])),
     ("status", _rule(
-        exact=["전달여부", "전달 유무", "전달현황", "전달상태", "전달결과", "발송여부", "발송현황", "발송상태",
+        exact=["최종증빙 확인", "최종증빙확인", "최종 증빙 확인", "최종증빙", "증빙확인", "증빙 확인",
+               "전달여부", "전달 유무", "전달현황", "전달상태", "전달결과", "발송여부", "발송현황", "발송상태",
                "송부여부", "완료여부", "진행상태", "진행현황", "진행상황", "상태", "Status", "결과", "전달",
                "발송", "완료", "Delivered", "Delivery Status", "Delivery"],
         contains=["여부", "상태", "status", "현황", "유무", "결과"],
@@ -436,7 +437,7 @@ TODO_EXACT = {"x", "n", "no", "false", "0", "×", "✗", "✘", "-", "미", "대
 TODO_SUB = ["미전달", "미발송", "미송부", "미완료", "미수령", "미진행", "미통보", "안됨", "못함", "대기", "예정", "진행중",
             "보류", "반송", "거부", "거절", "불가", "pending", "notyet", "notdelivered", "waiting", "hold"]
 DONE_SUB = ["완료", "전달", "발송", "송부", "수령", "통보", "등기", "우편", "직접", "방문", "이메일", "메일", "email",
-            "fax", "팩스", "deliver", "sent", "complete", "done"]
+            "fax", "팩스", "deliver", "sent", "complete", "done", "확인", "증빙"]
 
 
 def classify_status(v):
@@ -594,6 +595,8 @@ def parse_fsn(path: Path, overrides=None, skip_sheets=None) -> dict:
                 return None
             return row[c]
 
+        # 최종증빙 확인 칸: 값이 있으면 완료(N/X/0/- 등 부정 값 제외), 비어 있으면 미전달
+        evidence = "status" in m and "증빙" in norm_header(hdr["headers"][m["status"]][1])
         for ri in range(hdr["header_row"] + 1, len(grid)):
             row = grid[ri]
             hosp = row_hospital(row, m)
@@ -627,10 +630,13 @@ def parse_fsn(path: Path, overrides=None, skip_sheets=None) -> dict:
                 if state == "excluded":
                     res["excluded"] += 1
                     continue
-                if state == "unknown":
-                    res["unknown_status"] += 1
-                if state in ("", "unknown"):
-                    state = "done" if (date_v or wide_methods) else "todo"
+                if evidence:
+                    state = "todo" if state in ("", "todo") else "done"
+                else:
+                    if state == "unknown":
+                        res["unknown_status"] += 1
+                    if state in ("", "unknown"):
+                        state = "done" if (date_v or wide_methods) else "todo"
                 # 전달여부 칸에 "등기", "이메일" 처럼 방법이 적힌 경우
                 if not method and state == "done":
                     cm = canon_method(status_raw)
