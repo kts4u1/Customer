@@ -74,6 +74,7 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html, body { margin: 0; }
 body {
   background: var(--page);
@@ -297,7 +298,7 @@ td button.hlink:hover { color: var(--accent); text-decoration: underline; }
 <div class="sticky">
   <div class="wrap filters">
     <label class="f"><span>담당자 (FSE · 영업)</span><select id="fPerson"></select></label>
-    <label class="f"><span>BU</span><select id="fBu"></select></label>
+    <label class="f" id="fBuWrap"><span>BU</span><select id="fBu"></select></label>
     <label class="f grow"><span>검색</span><input id="fQ" type="search" placeholder="병원명 · S/N · FSN · C&amp;R · FCO 번호" autocomplete="off"></label>
     <button class="btn" id="fReset" type="button">필터 초기화</button>
   </div>
@@ -345,6 +346,10 @@ const has = (rows, k) => rows.some(r => r[k] !== undefined && r[k] !== null && r
 const FSN_HAS = {};
 ['bu', 'cr', 'fsn', 'ft', 'fco', 'm', 'd', 'rp', 'fse', 'sales', 'sn', 'sys', 'site', 'rg', 'rm', 'sr'].forEach(k => FSN_HAS[k] = has(FSN, k));
 const hname = k => (H[k] && H[k].name) || k;
+/* BU(지역 묶음)와 전달방법은 아직 정확한 정보가 없어 화면에서 숨김 (2026-10-23 사용자 요청).
+   나중에 BU별 지역 목록을 받으면 SHOW_BU = true 로 바꾸고 지역 매핑을 추가합니다. */
+const SHOW_BU = false;
+const SHOW_METHOD = false;
 const methodLabel = r => r.m || '미지정';
 const buLabel = r => r.bu || '(BU 없음)';
 const crLabel = r => r.cr || '(C&R 없음)';
@@ -454,7 +459,7 @@ function buMatchesSrc(bu, src) {
   return al.indexOf(String(bu).toUpperCase()) >= 0;
 }
 function buOK(r, kind) {
-  if (!S.bu) return true;
+  if (!SHOW_BU || !S.bu) return true;
   if (kind === 'fsn') return r.bu === S.bu;
   return buMatchesSrc(S.bu, r.src);
 }
@@ -720,7 +725,7 @@ function viewOverview() {
 
   const cards = h('div', { class: 'cards' });
   if (FSN_OK) {
-    const useBu = FSN_HAS.bu;
+    const useBu = SHOW_BU && FSN_HAS.bu;
     const items = useBu ? groupFsn(fr, buLabel) : groupFsn(fr, crLabel);
     cards.append(h('div', { class: 'card' },
       h('h3', { text: useBu ? 'BU별 고객안내문 전달' : 'C&R별 고객안내문 전달' }),
@@ -767,7 +772,7 @@ function viewFsn() {
   const sub = h('div', { class: 'subfilters' });
   if (FSN_HAS.fsn) sub.append(selectBox('FSN', S.fsnId, uniqSorted(base.map(fsnLabel)), v => { S.fsnId = v; render(); }));
   if (FSN_HAS.cr) sub.append(selectBox('C&R', S.cr, uniqSorted(base.map(crLabel)), v => { S.cr = v; render(); }));
-  sub.append(selectBox('전달방법', S.method, uniqSorted(base.map(methodLabel)), v => { S.method = v; render(); }));
+  if (SHOW_METHOD) sub.append(selectBox('전달방법', S.method, uniqSorted(base.map(methodLabel)), v => { S.method = v; render(); }));
   out.push(sub);
 
   out.push(h('div', { class: 'kpis' },
@@ -778,9 +783,9 @@ function viewFsn() {
 
   const cards = h('div', { class: 'cards' });
   const card = (title, subText, content) => h('div', { class: 'card' }, h('h3', { text: title }), h('p', { class: 'sub', text: subText }), FSN_LEGEND(), content);
-  if (FSN_HAS.bu) cards.append(card('BU별', '누르면 BU 필터 적용', completionList(groupFsn(rows, buLabel), { id: 'fsn-bu', active: S.bu, onClick: k => { S.bu = S.bu === k ? '' : (k === '(BU 없음)' ? '' : k); render(); } })));
+  if (SHOW_BU && FSN_HAS.bu) cards.append(card('BU별', '누르면 BU 필터 적용', completionList(groupFsn(rows, buLabel), { id: 'fsn-bu', active: S.bu, onClick: k => { S.bu = S.bu === k ? '' : (k === '(BU 없음)' ? '' : k); render(); } })));
   if (FSN_HAS.cr) cards.append(card('C&R별', '미전달이 많은 순', completionList(groupFsn(rows, crLabel), { id: 'fsn-cr', active: S.cr, onClick: k => { S.cr = S.cr === k ? '' : k; render(); } })));
-  cards.append(card('전달방법별', '등기 · 직접전달 · 이메일', completionList(groupFsn(rows, methodLabel), { id: 'fsn-m', active: S.method, onClick: k => { S.method = S.method === k ? '' : k; render(); } })));
+  if (SHOW_METHOD) cards.append(card('전달방법별', '등기 · 직접전달 · 이메일', completionList(groupFsn(rows, methodLabel), { id: 'fsn-m', active: S.method, onClick: k => { S.method = S.method === k ? '' : k; render(); } })));
   if (FSN_HAS.fsn && !FSN_HAS.cr) cards.append(card('FSN별', '미전달이 많은 순', completionList(groupFsn(rows, fsnLabel), { id: 'fsn-id', active: S.fsnId, onClick: k => { S.fsnId = S.fsnId === k ? '' : k; render(); } })));
   if (FSN_HAS.fse) cards.append(card('담당 FSE별', '누르면 담당자 필터 적용', completionList(groupFsn(rows, r => r._fse.length ? r._fse : ['(미지정)']), { id: 'fsn-fse', active: S.person, onClick: k => { if (k !== '(미지정)') { S.person = S.person === k ? '' : k; render(); } } })));
   if (FSN_HAS.sales) cards.append(card('영업 담당별', '누르면 담당자 필터 적용', completionList(groupFsn(rows, r => r._sales.length ? r._sales : ['(미지정)']), { id: 'fsn-sales', active: S.person, onClick: k => { if (k !== '(미지정)') { S.person = S.person === k ? '' : k; render(); } } })));
@@ -808,7 +813,7 @@ function viewFsn() {
       countText: n => '병원 ' + fmt(n) + '곳',
       columns: [
         { key: 'name', label: '병원', get: a => a.name, cell: a => hospLink(a.k, a.name) },
-        { key: 'bu', label: S.fsnOnly === 'todo' ? '미전달 BU' : 'BU', get: a => Array.from(a.bus).join(', '), when: () => FSN_HAS.bu },
+        { key: 'bu', label: S.fsnOnly === 'todo' ? '미전달 BU' : 'BU', get: a => Array.from(a.bus).join(', '), when: () => SHOW_BU && FSN_HAS.bu },
         { key: 'todo', label: '미전달', num: true, get: a => a.allTodo, cell: a => a.allTodo ? h('span', { class: 'bad', text: fmt(a.allTodo) }) : '0' },
         { key: 'tot', label: '대상', num: true, get: a => a.allTotal },
         { key: 'rate', label: '전달률', num: true, get: a => pct(a.allTotal - a.allTodo, a.allTotal), cell: a => pct(a.allTotal - a.allTodo, a.allTotal) + '%' },
@@ -816,7 +821,7 @@ function viewFsn() {
         { key: 'fsn', label: '미전달 FSN', get: a => Array.from(a.fsns).join(', '), clip: true, when: () => FSN_HAS.fsn },
         { key: 'fse', label: 'FSE', get: a => Array.from(a.fse).join(', '), clip: true, when: () => FSN_HAS.fse },
         { key: 'sales', label: '영업', get: a => Array.from(a.sales).join(', '), clip: true, when: () => FSN_HAS.sales },
-        { key: 'm', label: S.fsnOnly === 'todo' ? '전달방법 (예정)' : '전달방법', get: a => Array.from(a.methods).join(', ') },
+        { key: 'm', label: S.fsnOnly === 'todo' ? '전달방법 (예정)' : '전달방법', get: a => Array.from(a.methods).join(', '), when: () => SHOW_METHOD },
       ],
     }));
   } else {
@@ -831,7 +836,7 @@ function fsnRowColumns(withHosp) {
   return [
     { key: 'h', label: '병원', get: r => r.h, cell: r => hospLink(r.k, r.h), when: () => withHosp },
     { key: 'site', label: 'Site', get: r => r.site, when: () => FSN_HAS.site },
-    { key: 'bu', label: 'BU', get: r => r.bu, nowrap: true, when: () => FSN_HAS.bu },
+    { key: 'bu', label: 'BU', get: r => r.bu, nowrap: true, when: () => SHOW_BU && FSN_HAS.bu },
     { key: 'cr', label: 'C&R', get: r => r.cr, when: () => FSN_HAS.cr },
     { key: 'fsn', label: 'FSN', get: r => r.fsn, when: () => FSN_HAS.fsn },
     { key: 'ft', label: '제목', get: r => r.ft, clip: true, when: () => FSN_HAS.ft },
@@ -840,7 +845,7 @@ function fsnRowColumns(withHosp) {
     { key: 'fse', label: 'FSE', get: r => r.fse, when: () => FSN_HAS.fse },
     { key: 'sales', label: '영업', get: r => r.sales, when: () => FSN_HAS.sales },
     { key: 's', label: '상태', get: r => (r.s ? '완료' : '미전달') + (r.sr ? ' (' + r.sr + ')' : ''), sortVal: r => r.s, cell: fsnStatusCell, nowrap: true },
-    { key: 'm', label: '전달방법', get: r => r.m || r.mr, nowrap: true },
+    { key: 'm', label: '전달방법', get: r => r.m || r.mr, nowrap: true, when: () => SHOW_METHOD },
     { key: 'd', label: '전달일', get: r => r.d, nowrap: true, when: () => FSN_HAS.d },
     { key: 'rp', label: '회신', get: r => r.rp, when: () => FSN_HAS.rp },
     { key: 'fco', label: '관련 FCO', get: r => r.fco, when: () => FSN_HAS.fco },
@@ -1014,7 +1019,7 @@ function viewInfo() {
     cards.append(h('div', { class: 'card' }, h('h3', { text: '전달여부 값 → 판정' }), h('p', { class: 'sub', text: '엑셀에 적힌 값을 완료/미전달로 어떻게 읽었는지' }),
       simpleTable(['엑셀 값', '판정', '건수'], D.fsn.statusValues.map(v => [v.value, STATE_KO[v.state] || v.state, fmt(v.count)]))));
   }
-  if (D.fsn && D.fsn.methodValues && D.fsn.methodValues.length) {
+  if (SHOW_METHOD && D.fsn && D.fsn.methodValues && D.fsn.methodValues.length) {
     cards.append(h('div', { class: 'card' }, h('h3', { text: '전달방법 값 → 분류' }), h('p', { class: 'sub', text: '등기 / 직접전달 / 이메일로 묶은 결과' }),
       simpleTable(['엑셀 값', '분류', '건수'], D.fsn.methodValues.map(v => [v.value, v.canon, fmt(v.count)]))));
   }
@@ -1044,6 +1049,7 @@ function renderFilters() {
   selP.value = S.person;
   let bus = uniqSorted(FSN.map(r => r.bu));
   if (!bus.length) bus = uniqSorted(FCO.map(r => r.src));
+  document.getElementById('fBuWrap').hidden = !SHOW_BU;
   const selB = document.getElementById('fBu');
   setKids(selB, h('option', { value: '', text: '전체' }), bus.map(b => h('option', { value: b, text: b })));
   selB.value = S.bu;
