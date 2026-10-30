@@ -237,17 +237,24 @@ def test_people_matching_robust():
         f.append(["오요한", "삼성서울병원(강남)"])
         f.append(["담당없음", "도담병원"])
         f.append(["박기표", "한빛병원"])
+        for nm in ("신동민", "서태훈", "조찬민", "성경주", "설재민", "임형묵"):  # FSE 명단 (병원 칸 비어 있음)
+            f.append([nm, ""])
         p = wb.create_sheet("CT PM Plan")                               # 이름은 대상 아니지만 S/N 있는 장비 시트
-        p.append(["S/N", "병원", "정", "부", "Jan"])
-        p.append(["C100", "아무병원", "신동민", "서태훈", "PM"])
-        p.append(["C101", "아무병원", "조찬민", "성경주", ""])
-        p.append(["C102", "아무병원", "설재민", "", "PM"])
-        p.append(["C103", "아무병원", "임형묵", "", ""])
+        p.append([None, None, "FSE", None, "Customer info", None, "기타"])
+        p.append(["S/N", "병원", "정", "부", "Name", "연락처", "확인자"])
+        p.append(["C100", "아무병원", "신동민", "서태훈", "홍고객", "010", "가길동"])
+        p.append(["C101", "아무병원", "조찬민", "성경주", "김고객", "010", "나길동"])
+        p.append(["C102", "아무병원", "설재민", "", "이고객", "010", "다길동"])
+        p.append(["C103", "아무병원", "임형묵", "", "박고객", "010", "라길동"])
         wb.save(path)
         pp = main.parse_people(path)
         assert pp["ok"], pp
         used = sorted(x["name"] for x in pp["sheets"] if x["used"])
         assert used == ["CT PM Plan", "FSE"], pp["sheets"]
+        ct = next(x for x in pp["sheets"] if x["name"] == "CT PM Plan")
+        assert sorted(x["header"] for x in ct["people"]) == ["부", "정"], ct      # 고객 쪽 이름 칸은 제외
+        assert sorted(x["header"] for x in ct["dropped"]) == ["Name", "확인자"], ct
+        assert pp["roster"] == 9 and len(pp["names"]) <= 9, (pp["roster"], pp["names"])
         def row(h, bu="CT", sn=""):
             return {"h": h, "hen": "", "bu": bu, "sn": sn, "eq": "", "code": "", "fse": "", "sales": ""}
         rows = [row("서울대병원"), row("누리병원"), row("삼성서울병원"), row("도담병원"), row("모름", sn="00C100"),

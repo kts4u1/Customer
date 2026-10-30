@@ -87,7 +87,12 @@ HTML 대시보드(`~/FSN_Dashboard/FSN_FCO_Dashboard.html`)를 만들고 Edge로
   (`looks_like_ko_name_column`), 정/부/Main/Sub 헤더, "담당없음" 등 제외(`PERSON_PLACEHOLDER`),
   그래도 없으면 FCO 파일(Closed 포함)의 S/N·병원별 FSE로 보충(`apply_fco_people`, `ppsrc="fco"`).
   [데이터 정보] 탭에 채워진 비율, 못 찾은 병원, 담당자 파일 병원명 예시, 각 시트의 칸 이름 전체를 표시.
-- **다음 할 일: 사용자 [데이터 정보] 탭 "담당자 파일" 부분 캡처로 실제 칸 이름/병원명 표기를 확인하고 규칙 조정.**
+- 2026-10-30 2차 실행 결과: 담당 FSE 채워짐 4,328/4,351(99%), 그중 S/N 연결 3,909. 그러나 "담당자 421명" — 장비 시트의
+  Customer info(고객 쪽 담당자) 이름까지 FSE로 들어옴. 담당자 파일의 병원명 칸은 "분당서울대 31번 Ing Elition X 3.0T"처럼 장비 별칭이라 이름 연결은 거의 무의미, S/N이 핵심.
+  → 수정: **FSE 명단(roster) = FSE 탭의 이름 + FCO 파일 FSE 이름**. FSE 칸 중 명단 이름 비율 50% 미만인 칸은 제외, 행 단위로도 명단 밖 이름은 제외.
+  헤더 위 묶음 제목(예: "Customer info")을 오른쪽으로 채워서 고객 쪽 묶음(`CUSTOMER_WORDS`) 칸은 제외.
+  [데이터 정보]에 FSE 명단 수, 제외한 칸과 이유, 명단 밖이라 뺀 이름(상위 20) 표시. FCO 파싱을 담당자 파일보다 먼저 함(명단에 FCO 이름 추가).
+- **다음 할 일: 실행 후 담당자 수와 "명단에 없어 뺀 이름" 확인. FSE 탭이 명단이 아니면(비율 0% 등) 명단 기준을 다시 정해야 함.**
 
 ## 자동 다운로드 (EdgeDownloader) — 회사 PC에서 동작 확인 완료
 - Edge(Windows 계정 SSO) + Selenium. 프로필 `~/FSN_Dashboard/browser_profile`(잠겨 있으면 `browser_profile_2`로 재시도), 다운로드 폴더 `~/FSN_Dashboard/downloads`.

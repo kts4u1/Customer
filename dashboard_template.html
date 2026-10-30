@@ -1045,12 +1045,16 @@ function viewInfo() {
     const KIND_KO = { sn: '담당자 파일 · S/N으로 연결', equip: '담당자 파일 · 장비 ID로 연결', code: '담당자 파일 · 고객코드로 연결', name: '담당자 파일 · 병원명으로 연결', loose: '담당자 파일 · 비슷한 병원명으로 연결', mod_mismatch: '담당자 파일에 병원은 있지만 해당 모달리티 담당이 없음', none: '담당자 파일에서 못 찾음', fco_sn: 'FCO 파일 · S/N으로 보충', fco_name: 'FCO 파일 · 병원명으로 보충' };
     const pcards = h('div', { class: 'cards' });
     pcards.append(h('div', { class: 'card' }, h('h3', { text: '연결 결과' }),
-      h('p', { class: 'sub', text: (P.file.name || '') + ' · ' + (P.file.time || '') + ' · 담당자 ' + fmt(P.names || 0) + '명 · 별칭 ' + fmt(P.aliases || 0) + '개' }),
+      h('p', { class: 'sub', text: (P.file.name || '') + ' · ' + (P.file.time || '') + ' · 사용한 담당자 ' + fmt(P.names || 0) + '명 · FSE 명단 ' + fmt(P.roster || 0) + '명 (FSE 탭 ' + fmt(P.rosterFseTab || 0) + '명 + FCO 파일) · 별칭 ' + fmt(P.aliases || 0) + '개' }),
       st.total ? h('p', { style: 'font-size:15px;font-weight:700;margin:0 0 10px', text: '담당 FSE가 채워진 행: ' + fmt(st.with_fse) + ' / ' + fmt(st.total) + ' (' + pct(st.with_fse, st.total) + '%)' }) : null,
       simpleTable(['고객안내문 행', '건수'], Object.keys(KIND_KO).filter(k => st[k]).map(k => [KIND_KO[k], fmt(st[k])]))));
     if ((P.unmatched || []).length) {
       pcards.append(h('div', { class: 'card' }, h('h3', { text: '담당 FSE를 못 찾은 병원 (상위 30)' }), h('p', { class: 'sub', text: '고객안내문 쪽 병원명 · 행 수' }),
         simpleTable(['병원', '행 수'], P.unmatched.map(u => [u.name, fmt(u.count)]))));
+    }
+    if ((P.droppedNames || []).length) {
+      pcards.append(h('div', { class: 'card' }, h('h3', { text: 'FSE 명단에 없어 뺀 이름 (상위 20)' }), h('p', { class: 'sub', text: '고객 쪽 담당자 등. FSE인데 여기 있으면 알려 주세요' }),
+        simpleTable(['이름', '나온 횟수'], P.droppedNames.map(u => [u.name, fmt(u.count)]))));
     }
     if ((P.hospitalSamples || []).length) {
       pcards.append(h('div', { class: 'card' }, h('h3', { text: '담당자 파일의 병원명 예시' }), h('p', { class: 'sub', text: '왼쪽 목록과 표기가 어떻게 다른지 비교용' }),
@@ -1058,10 +1062,11 @@ function viewInfo() {
     }
     out.push(pcards);
     out.push(h('div', { class: 'card', style: 'margin-top:12px' }, h('h3', { text: '담당자 파일에서 읽은 시트와 칸' }), h('p', { class: 'sub', text: '연결 칸(병원/S/N/고객코드) → 담당자 칸' }),
-      simpleTable(['시트', '사용', '연결 칸', '담당자 칸', '비고', '시트의 칸 이름 (참고)'], (P.sheets || []).map(x => [
+      simpleTable(['시트', '사용', '연결 칸', '담당자 칸', '제외한 칸', '비고', '시트의 칸 이름 (참고)'], (P.sheets || []).map(x => [
         x.name, x.used ? '✓' : '',
         Object.keys(x.keys || {}).map(k => (FIELD_KO[k] || k) + ': ' + x.keys[k]).join(', '),
         (x.people || []).map(pc => pc.header + ' (' + (pc.role === 'sales' ? '영업' : 'FSE') + (pc.mod ? ' ' + pc.mod : '') + ')').join(', '),
+        (x.dropped || []).map(d => d.header + ': ' + d.reason).join(' / '),
         x.reason || (x.used ? fmt(x.rows) + '행' : ''),
         (x.headers || []).join(' | ')]), true)));
   }

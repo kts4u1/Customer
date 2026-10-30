@@ -778,8 +778,9 @@ PERSON_HINT = ["fse", "엔지니어", "engineer", "cse", "담당", "sales", "영
 PERSON_EXCLUDE = ["병원", "hospital", "account", "customer", "고객", "장비", "system", "model", "모델", "code", "코드",
                   "phone", "전화", "연락", "mail", "메일", "지역", "region", "주소", "address", "date", "일자", "날짜",
                   "month", "plan", "계획", "cycle", "주기", "count", "사번", "번호", "team", "팀", "영문", "english",
-                  "initial", "이니셜", "약어"]
+                  "initial", "이니셜", "약어", "contact", "의공", "원내", "병원측"]
 SALES_HINT = ["sales", "영업", "kam", "세일즈", "accountmanager"]
+CUSTOMER_WORDS = ["customer", "고객", "contact", "연락", "의공", "원내", "병원측", "병원정보", "hospitalinfo"]
 MOD_RE = re.compile(r"(?<![A-Z])(MRI|MR|CT|AMI|DXR|IGT|XR|DR|US)(?![A-Z])")
 MOD_CANON = {"MRI": "MR", "MR": "MR", "CT": "CT", "AMI": "CT", "DXR": "XR", "IGT": "XR", "XR": "XR", "DR": "XR",
              "US": "US"}
@@ -842,7 +843,7 @@ def looks_like_ko_name_column(values) -> bool:
     ko = [p for p in parts if KO_NAME_RE.match(p)]
     if len(ko) < 0.7 * len(parts) or len(set(ko)) < 4:
         return False
-    bad = sum(1 for p in ko if p in KO_REGIONS or p in STATUS_WORDS or p.endswith(("시", "군", "구", "도", "동")))
+    bad = sum(1 for p in ko if p in KO_REGIONS or p in STATUS_WORDS or p.endswith(("시", "군", "구", "도")))
     return bad <= 0.3 * len(ko)
 
 
@@ -876,7 +877,7 @@ def _person_header(h_raw: str):
     return None
 
 
-def parse_people(path: Path) -> dict:
+def parse_people(path: Path, extra_roster=None) -> dict:
     """PM Planning 파일에서 병원/장비 → 담당자 이름 매핑을 만듦."""
     import openpyxl
     res = {"ok": False, "error": "", "sheets": [], "maps": {"sn": {}, "equip": {}, "code": {}, "name": {}},
@@ -905,10 +906,12 @@ def parse_people(path: Path) -> dict:
         except Exception:
             pass
 
+    # ---- 1단계: 시트마다 헤더 · 연결 칸 · 담당자 후보 칸 찾기 ----
     aliases = {}
-    parsed = []
+    sheets_found = []
     for title, grid, is_wanted in grids:
-        info = {"name": title, "used": False, "reason": "", "keys": {}, "people": [], "rows": 0, "headers": []}
+        info = {"name": title, "used": False, "reason": "", "keys": {}, "people": [], "dropped": [], "rows": 0,
+                "headers": []}
         res["sheets"].append(info)
         best = None
         for r in range(min(30, len(grid))):
@@ -926,13 +929,19 @@ def parse_people(path: Path) -> dict:
         _, hr, cells, keys, pcols = best
         info["headers"] = [t for _, t in cells if t][:40]
         data = grid[hr + 1:]
+        # 헤더 위 줄의 묶음 제목(예: "Customer info")을 오른쪽 빈칸으로 채워서 칸마다 묶음 이름을 앎
+        group = {}
+        if hr > 0:
+            cur = ""
+            for c, v in enumerate(grid[hr - 1]):
+                cur = clean_text(v) or cur
+                group[c] = cur
         people = {}
         for c, ph in pcols.items():
             sample = [row[c] for row in data[:400] if c < len(row)]
-            if not looks_like_names(sample):
-                continue
-            people[c] = (ph[0], ph[1])
-        # 헤더로 못 알아본 칸이라도 값이 대부분 한글 이름이면 담당자 칸으로 (지역·상태 칸 제외)
+            if looks_like_names(sample):
+                people[c] = (ph[0], ph[1], "header")
+        # 헤더로 못 알아본 칸이라도 값이 대부분 한글 이름이면 후보로 (지역·상태 칸 제외)
         for c, t in cells:
             if c in people or c in keys.values() or not t:
                 continue
@@ -940,12 +949,17 @@ def parse_people(path: Path) -> dict:
             if any(x in h for x in PERSON_EXCLUDE):
                 continue
             if looks_like_ko_name_column([row[c] for row in data[:400] if c < len(row)]):
-                people[c] = ("sales" if any(w in h for w in SALES_HINT) else "fse", mod_tags(t))
+                people[c] = ("sales" if any(w in h for w in SALES_HINT) else "fse", mod_tags(t), "values")
+        # 고객 쪽 담당자(Customer info, 의공팀 등) 묶음은 제외
+        for c in list(people):
+            g_txt = norm_header(group.get(c, ""))
+            if any(w in g_txt for w in CUSTOMER_WORDS):
+                info["dropped"].append({"header": cells[c][1], "reason": f"'{group.get(c)}' 묶음 (고객 쪽 담당자)"})
+                del people[c]
         info["header_row"] = hr + 1
         info["keys"] = {f: cells[c][1] for f, c in keys.items()}
-        info["people"] = [{"header": cells[c][1], "role": v[0], "mod": "/".join(sorted(v[1]))} for c, v in people.items()]
-        # FSE 명단 시트: 한글 이름 칸 + 영문/사번 칸 → 별칭
-        if "fse" in norm_header(title) or "담당" in norm_header(title):
+        is_roster = "fse" in norm_header(title) or "담당" in norm_header(title)
+        if is_roster:
             ko_col = next((c for c in range(len(cells)) if looks_like_names([row[c] for row in data[:400] if c < len(row)])
                            and sum(1 for row in data[:400] if c < len(row) and KO_NAME_RE.match(clean_text(row[c])))
                            >= 2), None)
@@ -964,19 +978,69 @@ def parse_people(path: Path) -> dict:
                                 a, ko = clean_text(row[c]), clean_text(row[ko_col])
                                 if a and KO_NAME_RE.match(ko) and norm_header(a) not in PLACEHOLDER:
                                     aliases[alias_key(a)] = ko
+                if ko_col not in people and ko_col not in keys.values():
+                    people[ko_col] = ("fse", set(), "roster")
+        sheets_found.append((info, keys, people, data, is_wanted, is_roster, cells))
+
+    # ---- 2단계: FSE 명단 = FSE 탭의 이름들 (고객 쪽 사람을 걸러내는 기준) ----
+    roster = set()
+    for info, keys, people, data, is_wanted, is_roster, cells in sheets_found:
+        if not is_roster:
+            continue
+        for c, (role, _m, _src) in people.items():
+            if role != "fse":
+                continue
+            for row in data:
+                if c < len(row):
+                    for nm in person_parts(row[c]):
+                        if KO_NAME_RE.match(nm) or EN_NAME_RE.match(nm):
+                            roster.add(aliases.get(alias_key(nm), nm))
+    roster_fse_tab = len(roster)
+    # FCO 파일의 FSE 이름도 명단에 추가 (FSE 탭이 빠진 사람이 있어도 놓치지 않게)
+    if roster:
+        for nm in (extra_roster or []):
+            roster.add(aliases.get(alias_key(nm), nm))
+    res["roster"] = len(roster)
+    res["roster_fse_tab"] = roster_fse_tab
+
+    def in_roster(nm):
+        return nm in roster
+
+    # ---- 3단계: 담당자 칸 확정 (명단에 없는 이름이 대부분인 칸은 고객 담당자 등으로 보고 제외) ----
+    parsed = []
+    for info, keys, people, data, is_wanted, is_roster, cells in sheets_found:
+        for c in list(people):
+            role, mods, src = people[c]
+            if role != "fse" or is_roster:
+                continue
+            parts = [aliases.get(alias_key(nm), nm) for row in data[:1500] if c < len(row)
+                     for nm in person_parts(row[c])]
+            if roster:
+                ratio = sum(1 for nm in parts if in_roster(nm)) / max(1, len(parts))
+                if ratio < 0.5:
+                    info["dropped"].append({"header": cells[c][1],
+                                            "reason": f"FSE 명단에 있는 이름 {round(ratio * 100)}% (고객 쪽 사람으로 보고 제외)"})
+                    del people[c]
+            elif src == "values":
+                # 명단이 없으면 헤더로 확인되지 않은 칸은 쓰지 않음
+                info["dropped"].append({"header": cells[c][1], "reason": "FSE 명단이 없어 확인 불가 → 제외"})
+                del people[c]
+        info["people"] = [{"header": cells[c][1], "role": v[0], "mod": "/".join(sorted(v[1]))}
+                          for c, v in people.items()]
         if not people:
-            info["reason"] = "담당자 이름 칸을 찾지 못함" + (" (별칭 명단으로만 사용)" if aliases else "")
+            info["reason"] = info["reason"] or ("담당자 이름 칸을 찾지 못함" + (" (FSE 명단으로 사용)" if is_roster else ""))
             continue
         if not any(f in keys for f in ("hospital", "hospital2", "hospital_en", "sn", "equip", "code")):
-            info["reason"] = "병원/S/N 칸이 없어 연결 불가" + (" (별칭 명단으로만 사용)" if aliases else "")
+            info["reason"] = "병원/S/N 칸이 없어 연결 불가" + (" (FSE 명단으로 사용)" if is_roster else "")
             continue
         if not is_wanted and not any(f in keys for f in ("sn", "equip")):
             info["reason"] = "장비(S/N·장비 ID) 칸이 없는 시트라 사용 안 함"
             continue
         info["used"] = True
-        parsed.append((info, keys, people, data))
+        parsed.append((info, keys, {c: (v[0], v[1]) for c, v in people.items()}, data))
 
     names_seen = set()
+    dropped_names = Counter()
     loose, hosp_samples = {}, []
     for info, keys, people, data in parsed:
         def g(row, f):
@@ -991,6 +1055,9 @@ def parse_people(path: Path) -> dict:
                     continue
                 for nm in person_parts(row[c]):
                     nm = aliases.get(alias_key(nm), nm)
+                    if role == "fse" and roster and not in_roster(nm):
+                        dropped_names[nm] += 1
+                        continue
                     mods = hmods or row_mods
                     entries.append((role, "/".join(sorted(mods)), nm))
                     names_seen.add(nm)
@@ -1019,6 +1086,7 @@ def parse_people(path: Path) -> dict:
                     if e not in lst:
                         lst.append(e)
         info["rows"] = n
+    res["dropped_names"] = [{"name": n, "count": c} for n, c in dropped_names.most_common(20)]
     # 느슨한 이름은 담당자 파일 안에서 한 병원만 가리킬 때만 사용 (다른 병원과 헷갈리지 않게)
     res["maps"]["loose"] = {lk: res["maps"]["name"][next(iter(ks))] for lk, ks in loose.items()
                             if len(ks) == 1 and next(iter(ks)) in res["maps"]["name"]}
@@ -1029,7 +1097,7 @@ def parse_people(path: Path) -> dict:
     if not res["ok"]:
         res["error"] = "Hospital table / FSE 시트에서 병원-담당자 정보를 찾지 못했습니다."
     log(f"담당자 파일 파싱: ok={res['ok']}, 시트={[(i['name'], i['used'], i.get('reason')) for i in res['sheets']]}, "
-        f"이름 {len(names_seen)}명, 별칭 {len(aliases)}")
+        f"이름 {len(names_seen)}명, FSE 명단 {len(roster)}명, 별칭 {len(aliases)}, 명단 밖 제외 {sum(dropped_names.values())}건")
     return res
 
 
@@ -1326,6 +1394,9 @@ def build_dashboard_data(fsn_info: dict, fco_infos: list, today: dt.date, people
             "stats": people_apply.get("stats", {}),
             "unmatched": people_apply.get("unmatched", []),
             "hospitalSamples": people_parse.get("hospital_samples", []),
+            "roster": people_parse.get("roster", 0),
+            "rosterFseTab": people_parse.get("roster_fse_tab", 0),
+            "droppedNames": people_parse.get("dropped_names", []),
         },
         "link": {"matchedHospitals": matched, "linkedBySn": linked_by_sn},
     }
@@ -2040,11 +2111,23 @@ def run_pipeline(force: bool, manual_fsn: Path | None, report, step, stop_event,
     else:
         step(1, "ok", " · ".join(p[0] for p in fco_ok))
 
+    fco_infos = []
+    for src, path, stale, origin, _ in fco_plan:
+        if path:
+            meta = read_meta(path)
+            fco_infos.append({"source": src, "parse": parse_fco(path, src, today),
+                              "file": file_info(path, meta.get("original_name", ""), stale, origin)})
+        else:
+            fco_infos.append({"source": src, "parse": None, "file": {},
+                              "error": "파일 없음 (FCO 주소 미설정, FCO 프로그램 캐시도 없음)"})
+    fco_names = {n for i in fco_infos for x in ((i.get("parse") or {}).get("people") or [])
+                 for n in person_parts(x[3]) if KO_NAME_RE.match(n) or EN_NAME_RE.match(n)}
+
     people_info = None
     if pm_path:
         report("담당자 파일을 읽는 중...")
         meta = read_meta(pm_path)
-        pp_parse = parse_people(pm_path)
+        pp_parse = parse_people(pm_path, fco_names)
         people_info = {"parse": pp_parse, "file": file_info(pm_path, meta.get("original_name", ""), pm_stale, pm_origin)}
         d = dt.datetime.fromtimestamp(pm_path.stat().st_mtime).strftime("%m/%d")
         if not pp_parse.get("ok"):
@@ -2067,16 +2150,6 @@ def run_pipeline(force: bool, manual_fsn: Path | None, report, step, stop_event,
         report("엑셀 데이터를 읽는 중... (파일이 크면 1~2분 걸릴 수 있습니다)")
         fsn_info = {"parse": parse_fsn(fsn_path, col_overrides, cfg.get("skip_sheets")),
                     "file": file_info(fsn_path, meta.get("original_name", ""), fsn_stale, fsn_origin)}
-    fco_infos = []
-    for src, path, stale, origin, _ in fco_plan:
-        if path:
-            meta = read_meta(path)
-            fco_infos.append({"source": src, "parse": parse_fco(path, src, today),
-                              "file": file_info(path, meta.get("original_name", ""), stale, origin)})
-        else:
-            fco_infos.append({"source": src, "parse": None, "file": {},
-                              "error": "파일 없음 (FCO 주소 미설정, FCO 프로그램 캐시도 없음)"})
-
     if not (fsn_info and fsn_info["parse"].get("ok")) and not any((i.get("parse") or {}).get("ok")
                                                                   for i in fco_infos):
         if fsn_info and fsn_info["parse"].get("error"):
@@ -2298,7 +2371,9 @@ def run_cli(args):
     people_info = None
     if args.people:
         pth = Path(args.people)
-        people_info = {"parse": parse_people(pth), "file": file_info(pth, origin="직접 지정")}
+        fco_names = {n for i in fco_infos for x in ((i.get("parse") or {}).get("people") or [])
+                     for n in person_parts(x[3]) if KO_NAME_RE.match(n) or EN_NAME_RE.match(n)}
+        people_info = {"parse": parse_people(pth, fco_names), "file": file_info(pth, origin="직접 지정")}
     data = build_dashboard_data(fsn_info, fco_infos, today, people_info)
     if args.sample:
         data["sample"] = True
