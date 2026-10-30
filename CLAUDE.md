@@ -81,7 +81,13 @@ HTML 대시보드(`~/FSN_Dashboard/FSN_FCO_Dashboard.html`)를 만들고 Edge로
 - 적용 `apply_people`: 고객안내문 행마다 S/N → 장비 ID → 고객코드 → 병원명 순으로 찾고, 행의 시트(MR/CT/IGT…)와 모달리티가 맞는 FSE + 모달리티 없는 담당자(영업)를 넣음.
   (XR = DXR/IGT로 취급, `MOD_CANON`). 고객안내문 파일에 이미 담당자가 있으면 덮어쓰지 않음. `r["ppsrc"]="pm"` 표시.
 - 진행 창 3단계 "담당자 파일 (PM Planning)" 추가 → 대시보드는 4단계. [데이터 정보] 탭에 연결 결과/못 찾은 병원/읽은 칸 표시.
-- **다음 할 일: 사용자 [데이터 정보] 탭 캡처로 Hospital table/FSE 시트의 실제 칸 이름을 확인하고 규칙 조정.**
+- 2026-10-30 1차 실행 결과: 담당 FSE가 거의 비어 있음("(미지정)" 미전달 1,412건, 이름 붙은 행은 수십 건). "담당없음"이 사람 이름으로 나옴.
+  → 보강(실제 원인은 아직 미확인): 이름이 안 맞는 시트도 S/N·장비 ID 칸이 있으면 장비 단위로 사용, 비슷한 병원명(`loose_key`, 담당자 파일에서
+  한 병원만 가리킬 때만), 한 칸에 병원 여러 개(`split_hospitals`), S/N 앞자리 0 무시(`sn_norm`), 헤더 없이도 값이 한글 이름인 칸 인식
+  (`looks_like_ko_name_column`), 정/부/Main/Sub 헤더, "담당없음" 등 제외(`PERSON_PLACEHOLDER`),
+  그래도 없으면 FCO 파일(Closed 포함)의 S/N·병원별 FSE로 보충(`apply_fco_people`, `ppsrc="fco"`).
+  [데이터 정보] 탭에 채워진 비율, 못 찾은 병원, 담당자 파일 병원명 예시, 각 시트의 칸 이름 전체를 표시.
+- **다음 할 일: 사용자 [데이터 정보] 탭 "담당자 파일" 부분 캡처로 실제 칸 이름/병원명 표기를 확인하고 규칙 조정.**
 
 ## 자동 다운로드 (EdgeDownloader) — 회사 PC에서 동작 확인 완료
 - Edge(Windows 계정 SSO) + Selenium. 프로필 `~/FSN_Dashboard/browser_profile`(잠겨 있으면 `browser_profile_2`로 재시도), 다운로드 폴더 `~/FSN_Dashboard/downloads`.

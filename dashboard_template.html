@@ -788,7 +788,9 @@ function viewFsn() {
   if (SHOW_METHOD) cards.append(card('전달방법별', '등기 · 직접전달 · 이메일', completionList(groupFsn(rows, methodLabel), { id: 'fsn-m', active: S.method, onClick: k => { S.method = S.method === k ? '' : k; render(); } })));
   if (FSN_HAS.fsn && !FSN_HAS.cr) cards.append(card('FSN별', '미전달이 많은 순', completionList(groupFsn(rows, fsnLabel), { id: 'fsn-id', active: S.fsnId, onClick: k => { S.fsnId = S.fsnId === k ? '' : k; render(); } })));
   const PP_FROM_PM = FSN.some(r => r.ppsrc === 'pm');
-  if (FSN_HAS.fse) cards.append(card('담당 FSE별', PP_FROM_PM ? '담당자 파일(PM Planning) 기준 · 누르면 담당자 필터 적용' : '누르면 담당자 필터 적용', completionList(groupFsn(rows, r => r._fse.length ? r._fse : ['(미지정)']), { id: 'fsn-fse', active: S.person, onClick: k => { if (k !== '(미지정)') { S.person = S.person === k ? '' : k; render(); } } })));
+  const PP_FROM_FCO = FSN.some(r => r.ppsrc === 'fco');
+  const ppSub = PP_FROM_PM && PP_FROM_FCO ? '담당자 파일 + FCO 파일 기준' : PP_FROM_PM ? '담당자 파일(PM Planning) 기준' : PP_FROM_FCO ? 'FCO 파일 기준' : '';
+  if (FSN_HAS.fse) cards.append(card('담당 FSE별', (ppSub ? ppSub + ' · ' : '') + '누르면 담당자 필터 적용', completionList(groupFsn(rows, r => r._fse.length ? r._fse : ['(미지정)']), { id: 'fsn-fse', active: S.person, onClick: k => { if (k !== '(미지정)') { S.person = S.person === k ? '' : k; render(); } } })));
   if (FSN_HAS.sales) cards.append(card('영업 담당별', '누르면 담당자 필터 적용', completionList(groupFsn(rows, r => r._sales.length ? r._sales : ['(미지정)']), { id: 'fsn-sales', active: S.person, onClick: k => { if (k !== '(미지정)') { S.person = S.person === k ? '' : k; render(); } } })));
   if (!FSN_HAS.fse && !FSN_HAS.sales && FCO_OK) {
     cards.append(card('담당 FSE별 (FCO 기준)', '고객안내문 파일에 담당자가 없어 FCO 파일의 병원별 FSE로 묶음',
@@ -1040,22 +1042,28 @@ function viewInfo() {
   }
   if (P.file && P.file.name) {
     const st = P.stats || {};
-    const KIND_KO = { sn: 'S/N으로 연결', equip: '장비 ID로 연결', code: '고객코드로 연결', name: '병원명으로 연결', mod_mismatch: '병원은 찾았지만 모달리티가 다름', none: '연결 못 함' };
+    const KIND_KO = { sn: '담당자 파일 · S/N으로 연결', equip: '담당자 파일 · 장비 ID로 연결', code: '담당자 파일 · 고객코드로 연결', name: '담당자 파일 · 병원명으로 연결', loose: '담당자 파일 · 비슷한 병원명으로 연결', mod_mismatch: '담당자 파일에 병원은 있지만 해당 모달리티 담당이 없음', none: '담당자 파일에서 못 찾음', fco_sn: 'FCO 파일 · S/N으로 보충', fco_name: 'FCO 파일 · 병원명으로 보충' };
     const pcards = h('div', { class: 'cards' });
     pcards.append(h('div', { class: 'card' }, h('h3', { text: '연결 결과' }),
       h('p', { class: 'sub', text: (P.file.name || '') + ' · ' + (P.file.time || '') + ' · 담당자 ' + fmt(P.names || 0) + '명 · 별칭 ' + fmt(P.aliases || 0) + '개' }),
+      st.total ? h('p', { style: 'font-size:15px;font-weight:700;margin:0 0 10px', text: '담당 FSE가 채워진 행: ' + fmt(st.with_fse) + ' / ' + fmt(st.total) + ' (' + pct(st.with_fse, st.total) + '%)' }) : null,
       simpleTable(['고객안내문 행', '건수'], Object.keys(KIND_KO).filter(k => st[k]).map(k => [KIND_KO[k], fmt(st[k])]))));
     if ((P.unmatched || []).length) {
-      pcards.append(h('div', { class: 'card' }, h('h3', { text: '담당자를 못 찾은 병원 (상위 30)' }), h('p', { class: 'sub', text: '병원명 표기가 다르면 S/N·장비 ID·고객코드로 연결합니다' }),
+      pcards.append(h('div', { class: 'card' }, h('h3', { text: '담당 FSE를 못 찾은 병원 (상위 30)' }), h('p', { class: 'sub', text: '고객안내문 쪽 병원명 · 행 수' }),
         simpleTable(['병원', '행 수'], P.unmatched.map(u => [u.name, fmt(u.count)]))));
+    }
+    if ((P.hospitalSamples || []).length) {
+      pcards.append(h('div', { class: 'card' }, h('h3', { text: '담당자 파일의 병원명 예시' }), h('p', { class: 'sub', text: '왼쪽 목록과 표기가 어떻게 다른지 비교용' }),
+        simpleTable(['담당자 파일 병원명'], P.hospitalSamples.map(n => [n]))));
     }
     out.push(pcards);
     out.push(h('div', { class: 'card', style: 'margin-top:12px' }, h('h3', { text: '담당자 파일에서 읽은 시트와 칸' }), h('p', { class: 'sub', text: '연결 칸(병원/S/N/고객코드) → 담당자 칸' }),
-      simpleTable(['시트', '사용', '연결 칸', '담당자 칸', '비고'], (P.sheets || []).map(x => [
+      simpleTable(['시트', '사용', '연결 칸', '담당자 칸', '비고', '시트의 칸 이름 (참고)'], (P.sheets || []).map(x => [
         x.name, x.used ? '✓' : '',
         Object.keys(x.keys || {}).map(k => (FIELD_KO[k] || k) + ': ' + x.keys[k]).join(', '),
         (x.people || []).map(pc => pc.header + ' (' + (pc.role === 'sales' ? '영업' : 'FSE') + (pc.mod ? ' ' + pc.mod : '') + ')').join(', '),
-        x.reason || (x.used ? fmt(x.rows) + '행' : '')]), true)));
+        x.reason || (x.used ? fmt(x.rows) + '행' : ''),
+        (x.headers || []).join(' | ')]), true)));
   }
 
   out.push(h('div', { class: 'section-title', text: '고객안내문 ↔ FCO 연결' }));

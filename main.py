@@ -788,13 +788,62 @@ EN_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z.'\-]*(\s+[A-Za-z][A-Za-z.'\-]*){0,3}$
 PLACE_END = ("병원", "의원", "센터", "의료원", "hospital", "univ", "clinic")
 
 
+PERSON_PLACEHOLDER = {"담당없음", "없음", "공석", "미정", "미지정", "tbd", "none", "vacant", "해당없음", "퇴사", "na",
+                      "-", "?", "x", "0", "n"}
+KO_REGIONS = {"서울", "경기", "인천", "부산", "대구", "광주", "대전", "울산", "세종", "강원", "충북", "충남", "전북", "전남",
+              "경북", "경남", "제주", "수도권", "영남", "호남", "충청", "중부", "남부", "북부", "본사"}
+STATUS_WORDS = {"완료", "진행", "예정", "대기", "보류", "취소", "정상", "불량", "교체", "점검", "해당", "없음", "미정", "공석",
+                "담당없음", "진행중", "미완료", "필요", "불필요", "완료됨"}
+
+
+def sn_norm(v) -> str:
+    """S/N 비교용: 영숫자만, 대문자, 앞의 0 제거"""
+    return sn_key(v).lstrip("0")
+
+
+def loose_key(name) -> str:
+    """병원명 느슨한 비교용: 괄호 내용·법인명·'대학교/병원/의료원' 같은 꼬리말을 뺀 이름"""
+    s = re.sub(r"\(.*?\)|\[.*?\]", "", clean_text(name))
+    k = hospital_key(s)
+    k = k.replace("대학교", "대").replace("대학", "대")
+    k = re.sub(r"(의료재단|재단|부속|병원|의료원|의원|센터|hospital|hosp|university|univ|medical|center|centre|"
+               r"clinic|college)", "", k)
+    return k if len(k) >= 2 else ""
+
+
+def split_hospitals(v) -> list:
+    """한 칸에 병원이 여러 개 적힌 경우(줄바꿈, 쉼표 등) 나눔"""
+    out = []
+    for part in re.split(r"[\n,;/·]|\s{2,}", clean_text(v)):
+        part = part.strip()
+        if part and norm_header(part) not in PLACEHOLDER:
+            out.append(part)
+    return out
+
+
 def mod_tags(text) -> set:
     return {MOD_CANON[m] for m in MOD_RE.findall(clean_text(text).upper())}
 
 
 def person_parts(v) -> list:
     s = re.sub(r"\(.*?\)|\[.*?\]", "", clean_text(v))
-    return [x for x in split_people(s) if norm_header(x) not in PLACEHOLDER]
+    return [x for x in split_people(s)
+            if norm_header(x) not in PLACEHOLDER and norm_header(x) not in PERSON_PLACEHOLDER]
+
+
+def looks_like_ko_name_column(values) -> bool:
+    """헤더로는 알 수 없지만 값이 대부분 한글 사람 이름인 칸 (지역/상태 값 칸은 제외)"""
+    vals = [clean_text(v) for v in values if clean_text(v) and not isinstance(v, (int, float, dt.date))]
+    if len(vals) < 3:
+        return False
+    parts = [p for v in vals for p in person_parts(v)]
+    if not parts:
+        return False
+    ko = [p for p in parts if KO_NAME_RE.match(p)]
+    if len(ko) < 0.7 * len(parts) or len(set(ko)) < 4:
+        return False
+    bad = sum(1 for p in ko if p in KO_REGIONS or p in STATUS_WORDS or p.endswith(("시", "군", "구", "도", "동")))
+    return bad <= 0.3 * len(ko)
 
 
 def looks_like_names(values) -> bool:
@@ -820,7 +869,7 @@ def _person_header(h_raw: str):
     if not h or any(x in h for x in PERSON_EXCLUDE):
         return None
     mods = mod_tags(h_raw)
-    if any(w in h for w in PERSON_HINT):
+    if any(w in h for w in PERSON_HINT) or h in ("정", "부", "main", "sub", "primary", "secondary", "1st", "2nd"):
         return ("sales" if any(w in h for w in SALES_HINT) else "fse", mods)
     if mods and re.sub(r"[^a-z]", "", h) and len(h) <= 6:  # "MR", "CT/AMI" 처럼 모달리티만 적힌 칸
         return ("fse", mods, "modonly")
@@ -840,18 +889,16 @@ def parse_people(path: Path) -> dict:
         return res
     try:
         sheets = [ws for ws in wb.worksheets if getattr(ws, "sheet_state", "visible") == "visible"]
-        wanted = [ws for ws in sheets if any(w in norm_header(ws.title) for w in ("hospital", "병원", "fse", "담당"))]
-        for ws in sheets:
-            if ws not in wanted:
-                res["sheets"].append({"name": ws.title, "used": False, "reason": "대상 시트 아님"})
+        wanted = {ws.title for ws in sheets if any(w in norm_header(ws.title)
+                                                    for w in ("hospital", "병원", "fse", "담당"))}
         grids = []
-        for ws in (wanted or sheets):
+        for ws in sheets:
             grid = []
             for i, r in enumerate(ws.iter_rows(values_only=True)):
                 if i >= 60000:
                     break
                 grid.append(list(r))
-            grids.append((ws.title, grid))
+            grids.append((ws.title, grid, ws.title in wanted))
     finally:
         try:
             wb.close()
@@ -860,8 +907,8 @@ def parse_people(path: Path) -> dict:
 
     aliases = {}
     parsed = []
-    for title, grid in grids:
-        info = {"name": title, "used": False, "reason": "", "keys": {}, "people": [], "rows": 0}
+    for title, grid, is_wanted in grids:
+        info = {"name": title, "used": False, "reason": "", "keys": {}, "people": [], "rows": 0, "headers": []}
         res["sheets"].append(info)
         best = None
         for r in range(min(30, len(grid))):
@@ -872,9 +919,12 @@ def parse_people(path: Path) -> dict:
             if score >= 2 and (best is None or score > best[0]):
                 best = (score, r, cells, keys, pcols)
         if not best:
+            first = next((r for r in grid[:10] if any(clean_text(v) for v in r)), [])
+            info["headers"] = [clean_text(v) for v in first if clean_text(v)][:40]
             info["reason"] = "헤더(병원/S/N/담당자 칸)를 찾지 못함"
             continue
         _, hr, cells, keys, pcols = best
+        info["headers"] = [t for _, t in cells if t][:40]
         data = grid[hr + 1:]
         people = {}
         for c, ph in pcols.items():
@@ -882,6 +932,15 @@ def parse_people(path: Path) -> dict:
             if not looks_like_names(sample):
                 continue
             people[c] = (ph[0], ph[1])
+        # 헤더로 못 알아본 칸이라도 값이 대부분 한글 이름이면 담당자 칸으로 (지역·상태 칸 제외)
+        for c, t in cells:
+            if c in people or c in keys.values() or not t:
+                continue
+            h = norm_header(t)
+            if any(x in h for x in PERSON_EXCLUDE):
+                continue
+            if looks_like_ko_name_column([row[c] for row in data[:400] if c < len(row)]):
+                people[c] = ("sales" if any(w in h for w in SALES_HINT) else "fse", mod_tags(t))
         info["header_row"] = hr + 1
         info["keys"] = {f: cells[c][1] for f, c in keys.items()}
         info["people"] = [{"header": cells[c][1], "role": v[0], "mod": "/".join(sorted(v[1]))} for c, v in people.items()]
@@ -911,10 +970,14 @@ def parse_people(path: Path) -> dict:
         if not any(f in keys for f in ("hospital", "hospital2", "hospital_en", "sn", "equip", "code")):
             info["reason"] = "병원/S/N 칸이 없어 연결 불가" + (" (별칭 명단으로만 사용)" if aliases else "")
             continue
+        if not is_wanted and not any(f in keys for f in ("sn", "equip")):
+            info["reason"] = "장비(S/N·장비 ID) 칸이 없는 시트라 사용 안 함"
+            continue
         info["used"] = True
         parsed.append((info, keys, people, data))
 
     names_seen = set()
+    loose, hosp_samples = {}, []
     for info, keys, people, data in parsed:
         def g(row, f):
             c = keys.get(f)
@@ -934,16 +997,19 @@ def parse_people(path: Path) -> dict:
             if not entries:
                 continue
             targets = []
-            if g(row, "sn") is not None and sn_key(g(row, "sn")):
-                targets.append(("sn", sn_key(g(row, "sn"))))
+            if g(row, "sn") is not None and sn_norm(g(row, "sn")):
+                targets.append(("sn", sn_norm(g(row, "sn"))))
             if id_key(g(row, "equip")):
                 targets.append(("equip", id_key(g(row, "equip"))))
             if id_key(g(row, "code")) and id_text(g(row, "code")):
                 targets.append(("code", id_key(g(row, "code"))))
             for f in ("hospital", "hospital2", "hospital_en"):
-                v = clean_text(g(row, f))
-                if v and norm_header(v) not in PLACEHOLDER:
+                for v in split_hospitals(g(row, f)):
                     targets.append(("name", hospital_key(v)))
+                    if loose_key(v):
+                        loose.setdefault(loose_key(v), set()).add(hospital_key(v))
+                    if len(hosp_samples) < 30 and v not in hosp_samples:
+                        hosp_samples.append(v)
             if not targets:
                 continue
             n += 1
@@ -953,6 +1019,10 @@ def parse_people(path: Path) -> dict:
                     if e not in lst:
                         lst.append(e)
         info["rows"] = n
+    # 느슨한 이름은 담당자 파일 안에서 한 병원만 가리킬 때만 사용 (다른 병원과 헷갈리지 않게)
+    res["maps"]["loose"] = {lk: res["maps"]["name"][next(iter(ks))] for lk, ks in loose.items()
+                            if len(ks) == 1 and next(iter(ks)) in res["maps"]["name"]}
+    res["hospital_samples"] = hosp_samples
     res["aliases"] = len(aliases)
     res["names"] = sorted(names_seen)
     res["ok"] = any(i["used"] for i in res["sheets"])
@@ -964,16 +1034,18 @@ def parse_people(path: Path) -> dict:
 
 
 def apply_people(fsn_rows, fco_rows, hospitals_unused, people: dict) -> dict:
-    """고객안내문 행에 담당 FSE/영업을 채움. S/N → 장비 ID → 고객코드 → 병원명 순으로 찾음."""
+    """고객안내문 행에 담당 FSE/영업을 채움.
+    S/N → 장비 ID → 고객코드 → 병원명 → 비슷한 병원명(담당자 파일에서 한 병원만 가리킬 때) 순으로 찾음."""
     stats = Counter()
     unmatched = Counter()
     maps = people["maps"]
     for r in fsn_rows:
         found = None
-        for kind, key in (("sn", sn_key(r.get("sn", ""))), ("equip", id_key(r.get("eq", ""))),
+        for kind, key in (("sn", sn_norm(r.get("sn", ""))), ("equip", id_key(r.get("eq", ""))),
                           ("code", id_key(r.get("code", ""))), ("name", hospital_key(r["h"])),
-                          ("name", hospital_key(r.get("hen", "")))):
-            if key and key in maps[kind]:
+                          ("name", hospital_key(r.get("hen", ""))), ("loose", loose_key(r["h"])),
+                          ("loose", loose_key(r.get("hen", "")))):
+            if key and key in maps.get(kind, {}):
                 found = (kind, maps[kind][key])
                 break
         if not found:
@@ -1003,6 +1075,49 @@ def apply_people(fsn_rows, fco_rows, hospitals_unused, people: dict) -> dict:
     return {"stats": dict(stats), "unmatched": [{"name": n, "count": c} for n, c in unmatched.most_common(30)]}
 
 
+FCO_SRC_MOD = {"MR": "MR", "XR": "XR", "CT/AMI": "CT"}
+
+
+def apply_fco_people(fsn_rows, fco_people: list) -> dict:
+    """담당자 파일로도 못 찾은 행: FCO 파일(Closed 포함)의 장비 S/N · 병원별 FSE로 채움"""
+    by_sn, by_hosp = {}, {}
+    for sn, account, src, fse in fco_people:
+        names = [n for n in person_parts(fse) if KO_NAME_RE.match(n) or EN_NAME_RE.match(n)]
+        if not names:
+            continue
+        mod = FCO_SRC_MOD.get(src, "")
+        if sn_norm(sn):
+            by_sn.setdefault(sn_norm(sn), [])
+            by_sn[sn_norm(sn)] += [n for n in names if n not in by_sn[sn_norm(sn)]]
+        for key in {hospital_key(account), "L:" + loose_key(account) if loose_key(account) else ""}:
+            if key:
+                lst = by_hosp.setdefault(key, [])
+                for n in names:
+                    if (mod, n) not in lst:
+                        lst.append((mod, n))
+    stats = Counter()
+    for r in fsn_rows:
+        if r.get("fse"):
+            continue
+        names = by_sn.get(sn_norm(r.get("sn", ""))) if sn_norm(r.get("sn", "")) else None
+        kind = "fco_sn"
+        if not names:
+            kind = "fco_name"
+            row_mods = mod_tags(r.get("bu", ""))
+            entries = []
+            for key in (r.get("k"), hospital_key(r["h"]), hospital_key(r.get("hen", "")),
+                        "L:" + loose_key(r["h"]) if loose_key(r["h"]) else ""):
+                if key and key in by_hosp:
+                    entries = by_hosp[key]
+                    break
+            names = list(dict.fromkeys(n for m, n in entries if not row_mods or m in row_mods))
+        if names:
+            r["fse"] = ", ".join(names)
+            r["ppsrc"] = "fco"
+            stats[kind] += 1
+    return dict(stats)
+
+
 def due_band(due, today):
     from dateutil.relativedelta import relativedelta
     if not due:
@@ -1016,7 +1131,8 @@ def due_band(due, today):
 
 def parse_fco(path: Path, source: str, today: dt.date) -> dict:
     import openpyxl
-    res = {"ok": False, "error": "", "rows": [], "sheet": "", "header_row": 0, "fields": {}, "closed": 0}
+    res = {"ok": False, "error": "", "rows": [], "sheet": "", "header_row": 0, "fields": {}, "closed": 0,
+           "people": []}
     try:
         wb = openpyxl.load_workbook(path, data_only=True, read_only=True)
     except Exception as e:
@@ -1061,6 +1177,9 @@ def parse_fco(path: Path, source: str, today: dt.date) -> dict:
         if norm_header(fco) == "fco":
             continue
         status = clean_text(g(row, "status"))
+        if clean_text(g(row, "fse")):
+            res["people"].append((clean_text(g(row, "sn")), clean_text(g(row, "account")) or clean_text(g(row, "site")),
+                                  source, clean_text(g(row, "fse"))))
         if status.strip().lower() == "closed":
             res["closed"] += 1
             continue
@@ -1122,9 +1241,16 @@ def build_dashboard_data(fsn_info: dict, fco_infos: list, today: dt.date, people
         r["k"] = k or hospital_key(r["h"]) or ("fsn:" + r["h"])
 
     people_parse = (people_info or {}).get("parse") or {}
-    people_apply = {}
+    people_apply = {"stats": {}, "unmatched": []}
     if people_parse.get("ok"):
         people_apply = apply_people(fsn_rows, fco_rows, None, people_parse)
+    fco_people = [x for info in fco_infos for x in ((info.get("parse") or {}).get("people") or [])]
+    people_apply["stats"].update(apply_fco_people(fsn_rows, fco_people))
+    people_apply["stats"]["total"] = len(fsn_rows)
+    people_apply["stats"]["with_fse"] = sum(1 for r in fsn_rows if r.get("fse"))
+    # 끝까지 담당자를 못 찾은 병원 (행 수 많은 순)
+    still = Counter(r["h"] for r in fsn_rows if not r.get("fse"))
+    people_apply["unmatched"] = [{"name": n, "count": c} for n, c in still.most_common(30)]
 
     hospitals = {}
     for r in fsn_rows:
@@ -1199,6 +1325,7 @@ def build_dashboard_data(fsn_info: dict, fco_infos: list, today: dt.date, people
             "names": len(people_parse.get("names", [])),
             "stats": people_apply.get("stats", {}),
             "unmatched": people_apply.get("unmatched", []),
+            "hospitalSamples": people_parse.get("hospital_samples", []),
         },
         "link": {"matchedHospitals": matched, "linkedBySn": linked_by_sn},
     }

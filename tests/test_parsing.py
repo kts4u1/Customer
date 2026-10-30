@@ -224,6 +224,47 @@ def test_people_mapping():
         assert res["stats"]["code"] == 1 and res["stats"]["name"] == 3
 
 
+def test_people_matching_robust():
+    """실제 파일에서 담당자가 거의 비던 문제(2026-10-30) 대응 확인"""
+    import openpyxl
+    with tempfile.TemporaryDirectory() as d:
+        path = Path(d) / "pm2.xlsx"
+        wb = openpyxl.Workbook()
+        f = wb.active
+        f.title = "FSE"
+        f.append(["FSE", "담당 병원"])
+        f.append(["김광수", "서울대학교병원, 가람병원\n누리병원"])     # 한 칸에 병원 여러 개
+        f.append(["오요한", "삼성서울병원(강남)"])
+        f.append(["담당없음", "도담병원"])
+        f.append(["박기표", "한빛병원"])
+        p = wb.create_sheet("CT PM Plan")                               # 이름은 대상 아니지만 S/N 있는 장비 시트
+        p.append(["S/N", "병원", "정", "부", "Jan"])
+        p.append(["C100", "아무병원", "신동민", "서태훈", "PM"])
+        p.append(["C101", "아무병원", "조찬민", "성경주", ""])
+        p.append(["C102", "아무병원", "설재민", "", "PM"])
+        p.append(["C103", "아무병원", "임형묵", "", ""])
+        wb.save(path)
+        pp = main.parse_people(path)
+        assert pp["ok"], pp
+        used = sorted(x["name"] for x in pp["sheets"] if x["used"])
+        assert used == ["CT PM Plan", "FSE"], pp["sheets"]
+        def row(h, bu="CT", sn=""):
+            return {"h": h, "hen": "", "bu": bu, "sn": sn, "eq": "", "code": "", "fse": "", "sales": ""}
+        rows = [row("서울대병원"), row("누리병원"), row("삼성서울병원"), row("도담병원"), row("모름", sn="00C100"),
+                row("하람병원", bu="MR"), row("하람병원", bu="CT")]
+        res = main.apply_people(rows, [], None, pp)
+        assert rows[0]["fse"] == "김광수", rows[0]                # 서울대학교병원 ~ 서울대병원
+        assert rows[1]["fse"] == "김광수", rows[1]                # 여러 병원이 적힌 칸
+        assert rows[2]["fse"] == "오요한", rows[2]                # 괄호 지점명 무시
+        assert rows[3]["fse"] == "", rows[3]                      # "담당없음"은 사람 아님
+        assert rows[4]["fse"] == "신동민, 서태훈", rows[4]          # S/N 앞자리 0 무시, 정/부 칸
+        fco_people = [("X999", "하람병원", "MR", "김민준"), ("C555", "(재)하람 병원", "CT/AMI", "Closed담당")]
+        st = main.apply_fco_people(rows, fco_people)
+        assert rows[5]["fse"] == "김민준" and rows[5]["ppsrc"] == "fco", rows[5]
+        assert rows[6]["fse"] == "", rows[6]                      # "Closed담당"은 이름 형식 아님 → CT 담당 없음
+        assert st.get("fco_name") == 1, st
+
+
 def test_download_urls():
     fco = main.FCO_SOURCES["MR"]["url"]
     assert main.add_download_param(fco) == (
