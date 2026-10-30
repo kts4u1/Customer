@@ -69,6 +69,15 @@ FCO_SOURCES = OrderedDict([
                 "cache": "CT_AMI_FCO_Action_Plan.xlsx", "pattern": r"(?<![A-Za-z])CT(?![a-z])"}),
 ])
 
+# 담당자 정보: PM Planning 마스터 파일의 "Hospital table" / "FSE" 시트 (2026-10-30 사용자 요청)
+PM_SOURCE = {
+    "name": "PM Planning (담당자)",
+    "url": "https://share.philips.com/:x:/r/sites/HS_CS_RPTeam/_layouts/15/Doc.aspx?sourcedoc="
+           "%7B1BF6D0D9-2A63-41B5-B38A-D8E52C403F5E%7D&file=%25u2605MASTER%25u2605%202025%20CT%20MR%20XR"
+           "%20PM%20Planning.xlsx&action=default&mobileredirect=true",
+    "cache": "PM_Planning_master.xlsx",
+}
+
 EXCEL_EXTS = (".xlsx", ".xlsm")
 
 
@@ -296,6 +305,11 @@ FSN_FIELDS = [
     ("sn", _rule(
         exact=["SN", "S/N", "Serial", "Serial No", "Serial Number", "시리얼", "시리얼번호", "장비번호", "Equipment No"],
         contains=["serial", "시리얼", "일련번호"])),
+    ("equip", _rule(exact=["장비 ID", "장비ID", "Equipment ID", "Equip ID", "EQ ID", "IB ID"],
+                    contains=["장비id", "equipmentid"])),
+    ("code", _rule(exact=["고객코드", "Customer Code", "Customer No", "Account No", "Account Number", "Account ID",
+                          "SAP Code", "거래처코드"],
+                   contains=["고객코드", "customercode", "accountno", "accountnumber"])),
     ("system", _rule(
         exact=["System Code Description", "System", "System Code", "장비", "장비명", "모델", "모델명", "Model",
                "Product", "제품", "제품명", "Equipment", "장비모델", "시스템"],
@@ -681,6 +695,8 @@ def parse_fsn(path: Path, overrides=None, skip_sheets=None) -> dict:
                 "fse": clean_text(g(row, "fse")),
                 "sales": clean_text(g(row, "sales")),
                 "sn": clean_text(g(row, "sn")),
+                "eq": id_text(g(row, "equip")),
+                "code": id_text(g(row, "code")),
                 "sys": clean_text(g(row, "system")),
                 "rg": clean_text(g(row, "region")),
                 "rm": clean_text(g(row, "remark"))[:300],
@@ -711,9 +727,7 @@ def parse_fsn(path: Path, overrides=None, skip_sheets=None) -> dict:
                                "(데이터 정보 탭의 '전달여부 값' 표 참고)")
     if res["fsn_from_sheet"]:
         res["warnings"].append("FSN 번호 컬럼이 없어 시트 이름을 FSN 구분으로 사용했습니다.")
-    if bu_from_sheet:
-        res["warnings"].append("BU 컬럼이 없어 시트 이름(" + ", ".join(c[1]["name"] for c in chosen) +
-                               ")을 BU로 사용했습니다.")
+    # (BU는 화면에서 숨김 상태라 시트 이름 → BU 안내는 표시하지 않음)
     res["ok"] = True
     log(f"FSN 파싱: {len(res['rows'])}행, 시트={[c[1]['name'] for c in chosen]}, 매핑={res['fields']}")
     return res
@@ -722,6 +736,272 @@ def parse_fsn(path: Path, overrides=None, skip_sheets=None) -> dict:
 # ---------------------------------------------------------------------------
 # FCO 파싱
 # ---------------------------------------------------------------------------
+
+def id_text(v) -> str:
+    """장비 ID / 고객코드: 자리표시 값("0", "-")은 빈칸"""
+    s = clean_text(v)
+    return "" if norm_header(s) in PLACEHOLDER else s
+
+
+def id_key(v) -> str:
+    return re.sub(r"[^0-9A-Za-z]", "", clean_text(v)).upper().lstrip("0")
+
+
+# ---------------------------------------------------------------------------
+# 담당자 파일 (PM Planning: Hospital table / FSE 시트) 파싱
+# ---------------------------------------------------------------------------
+
+PEOPLE_KEYS = [
+    ("hospital", _rule(
+        exact=["국문병원명", "병원명(국문)", "고객명(국문)", "병원명", "병원", "병원 이름", "고객명", "고객사", "고객사명",
+               "Hospital", "Hospital Name", "Account", "Account Name", "Customer", "Customer Name", "Site",
+               "Site Name", "기관명", "담당병원", "담당 병원"],
+        contains=["병원", "hospital", "account", "customer", "고객명", "고객사", "기관"],
+        exclude=["코드", "code", "id", "번호", "영문", "english", "담당자", "담당fse", "수량", "개수"])),
+    ("hospital2", _rule(exact=["고객명(국문)", "국문고객명", "국문병원명"], contains=["국문"],
+                        exclude=["영문", "코드"])),
+    ("hospital_en", _rule(exact=["영문병원명", "병원명(영문)", "고객명(영문)", "영문고객명"],
+                          contains=["영문병원", "병원영문", "영문고객", "고객영문"])),
+    ("sn", _rule(exact=["SN", "S/N", "Serial", "Serial No", "Serial Number", "시리얼", "시리얼번호", "일련번호"],
+                 contains=["serial", "시리얼", "일련번호"])),
+    ("equip", _rule(exact=["장비 ID", "장비ID", "Equipment ID", "Equip ID", "EQ ID", "IB ID", "장비번호"],
+                    contains=["장비id", "equipmentid"])),
+    ("code", _rule(exact=["고객코드", "Customer Code", "Customer No", "Account No", "Account Number", "Account ID",
+                          "SAP Code", "거래처코드"],
+                   contains=["고객코드", "customercode", "accountno", "accountnumber"])),
+    ("modality", _rule(exact=["Modality", "모달리티", "BU", "장비군", "제품군", "Product Group", "Modality Group"],
+                       contains=["modality", "모달리티"])),
+    ("region", _rule(exact=["지역", "Region", "권역", "Area", "지점"], contains=["region", "지역", "권역"])),
+]
+PERSON_HINT = ["fse", "엔지니어", "engineer", "cse", "담당", "sales", "영업", "kam", "세일즈", "name", "이름", "성명",
+               "manager", "service", "서비스"]
+PERSON_EXCLUDE = ["병원", "hospital", "account", "customer", "고객", "장비", "system", "model", "모델", "code", "코드",
+                  "phone", "전화", "연락", "mail", "메일", "지역", "region", "주소", "address", "date", "일자", "날짜",
+                  "month", "plan", "계획", "cycle", "주기", "count", "사번", "번호", "team", "팀", "영문", "english",
+                  "initial", "이니셜", "약어"]
+SALES_HINT = ["sales", "영업", "kam", "세일즈", "accountmanager"]
+MOD_RE = re.compile(r"(?<![A-Z])(MRI|MR|CT|AMI|DXR|IGT|XR|DR|US)(?![A-Z])")
+MOD_CANON = {"MRI": "MR", "MR": "MR", "CT": "CT", "AMI": "CT", "DXR": "XR", "IGT": "XR", "XR": "XR", "DR": "XR",
+             "US": "US"}
+KO_NAME_RE = re.compile(r"^[가-힣]{2,4}$")
+EN_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z.'\-]*(\s+[A-Za-z][A-Za-z.'\-]*){0,3}$")
+PLACE_END = ("병원", "의원", "센터", "의료원", "hospital", "univ", "clinic")
+
+
+def mod_tags(text) -> set:
+    return {MOD_CANON[m] for m in MOD_RE.findall(clean_text(text).upper())}
+
+
+def person_parts(v) -> list:
+    s = re.sub(r"\(.*?\)|\[.*?\]", "", clean_text(v))
+    return [x for x in split_people(s) if norm_header(x) not in PLACEHOLDER]
+
+
+def looks_like_names(values) -> bool:
+    vals = [clean_text(v) for v in values if clean_text(v) and not isinstance(v, (int, float, dt.date))]
+    if len(vals) < 2:
+        return False
+    if sum(1 for v in vals if v.lower().endswith(PLACE_END)) > 0.2 * len(vals):
+        return False
+    parts = [p for v in vals for p in person_parts(v)]
+    if not parts:
+        return False
+    ok = sum(1 for p in parts if KO_NAME_RE.match(p) or EN_NAME_RE.match(p))
+    return ok >= 0.6 * len(parts)
+
+
+def alias_key(name: str) -> str:
+    return re.sub(r"[\s.\-_]", "", clean_text(name)).lower()
+
+
+def _person_header(h_raw: str):
+    """사람 이름 컬럼 헤더면 (role, mods) 반환, 아니면 None"""
+    h = norm_header(h_raw)
+    if not h or any(x in h for x in PERSON_EXCLUDE):
+        return None
+    mods = mod_tags(h_raw)
+    if any(w in h for w in PERSON_HINT):
+        return ("sales" if any(w in h for w in SALES_HINT) else "fse", mods)
+    if mods and re.sub(r"[^a-z]", "", h) and len(h) <= 6:  # "MR", "CT/AMI" 처럼 모달리티만 적힌 칸
+        return ("fse", mods, "modonly")
+    return None
+
+
+def parse_people(path: Path) -> dict:
+    """PM Planning 파일에서 병원/장비 → 담당자 이름 매핑을 만듦."""
+    import openpyxl
+    res = {"ok": False, "error": "", "sheets": [], "maps": {"sn": {}, "equip": {}, "code": {}, "name": {}},
+           "aliases": 0, "names": []}
+    try:
+        wb = openpyxl.load_workbook(path, data_only=True, read_only=True)
+    except Exception as e:
+        res["error"] = f"엑셀 파일을 열 수 없습니다: {e}"
+        log_exc("담당자 파일 열기 실패")
+        return res
+    try:
+        sheets = [ws for ws in wb.worksheets if getattr(ws, "sheet_state", "visible") == "visible"]
+        wanted = [ws for ws in sheets if any(w in norm_header(ws.title) for w in ("hospital", "병원", "fse", "담당"))]
+        for ws in sheets:
+            if ws not in wanted:
+                res["sheets"].append({"name": ws.title, "used": False, "reason": "대상 시트 아님"})
+        grids = []
+        for ws in (wanted or sheets):
+            grid = []
+            for i, r in enumerate(ws.iter_rows(values_only=True)):
+                if i >= 60000:
+                    break
+                grid.append(list(r))
+            grids.append((ws.title, grid))
+    finally:
+        try:
+            wb.close()
+        except Exception:
+            pass
+
+    aliases = {}
+    parsed = []
+    for title, grid in grids:
+        info = {"name": title, "used": False, "reason": "", "keys": {}, "people": [], "rows": 0}
+        res["sheets"].append(info)
+        best = None
+        for r in range(min(30, len(grid))):
+            cells = [(c, clean_text(v)) for c, v in enumerate(grid[r])]
+            keys = match_columns(cells, PEOPLE_KEYS)
+            pcols = {c: _person_header(t) for c, t in cells if c not in keys.values() and _person_header(t)}
+            score = len(keys) + len(pcols)
+            if score >= 2 and (best is None or score > best[0]):
+                best = (score, r, cells, keys, pcols)
+        if not best:
+            info["reason"] = "헤더(병원/S/N/담당자 칸)를 찾지 못함"
+            continue
+        _, hr, cells, keys, pcols = best
+        data = grid[hr + 1:]
+        people = {}
+        for c, ph in pcols.items():
+            sample = [row[c] for row in data[:400] if c < len(row)]
+            if not looks_like_names(sample):
+                continue
+            people[c] = (ph[0], ph[1])
+        info["header_row"] = hr + 1
+        info["keys"] = {f: cells[c][1] for f, c in keys.items()}
+        info["people"] = [{"header": cells[c][1], "role": v[0], "mod": "/".join(sorted(v[1]))} for c, v in people.items()]
+        # FSE 명단 시트: 한글 이름 칸 + 영문/사번 칸 → 별칭
+        if "fse" in norm_header(title) or "담당" in norm_header(title):
+            ko_col = next((c for c in range(len(cells)) if looks_like_names([row[c] for row in data[:400] if c < len(row)])
+                           and sum(1 for row in data[:400] if c < len(row) and KO_NAME_RE.match(clean_text(row[c])))
+                           >= 2), None)
+            if ko_col is not None:
+                for c, t in cells:
+                    if c == ko_col or c in keys.values():
+                        continue
+                    h = norm_header(t)
+                    sample = [row[c] for row in data[:400] if c < len(row)]
+                    en_like = sum(1 for v in sample if EN_NAME_RE.match(clean_text(v))) >= max(2, 0.5 * len(
+                        [v for v in sample if clean_text(v)]))
+                    if en_like or any(w in h for w in ("영문", "english", "eng", "id", "사번", "code", "코드", "약어",
+                                                         "initial", "이니셜")):
+                        for row in data:
+                            if c < len(row) and ko_col < len(row):
+                                a, ko = clean_text(row[c]), clean_text(row[ko_col])
+                                if a and KO_NAME_RE.match(ko) and norm_header(a) not in PLACEHOLDER:
+                                    aliases[alias_key(a)] = ko
+        if not people:
+            info["reason"] = "담당자 이름 칸을 찾지 못함" + (" (별칭 명단으로만 사용)" if aliases else "")
+            continue
+        if not any(f in keys for f in ("hospital", "hospital2", "hospital_en", "sn", "equip", "code")):
+            info["reason"] = "병원/S/N 칸이 없어 연결 불가" + (" (별칭 명단으로만 사용)" if aliases else "")
+            continue
+        info["used"] = True
+        parsed.append((info, keys, people, data))
+
+    names_seen = set()
+    for info, keys, people, data in parsed:
+        def g(row, f):
+            c = keys.get(f)
+            return row[c] if c is not None and c < len(row) else None
+        n = 0
+        for row in data:
+            row_mods = mod_tags(g(row, "modality"))
+            entries = []
+            for c, (role, hmods) in people.items():
+                if c >= len(row):
+                    continue
+                for nm in person_parts(row[c]):
+                    nm = aliases.get(alias_key(nm), nm)
+                    mods = hmods or row_mods
+                    entries.append((role, "/".join(sorted(mods)), nm))
+                    names_seen.add(nm)
+            if not entries:
+                continue
+            targets = []
+            if g(row, "sn") is not None and sn_key(g(row, "sn")):
+                targets.append(("sn", sn_key(g(row, "sn"))))
+            if id_key(g(row, "equip")):
+                targets.append(("equip", id_key(g(row, "equip"))))
+            if id_key(g(row, "code")) and id_text(g(row, "code")):
+                targets.append(("code", id_key(g(row, "code"))))
+            for f in ("hospital", "hospital2", "hospital_en"):
+                v = clean_text(g(row, f))
+                if v and norm_header(v) not in PLACEHOLDER:
+                    targets.append(("name", hospital_key(v)))
+            if not targets:
+                continue
+            n += 1
+            for kind, key in targets:
+                lst = res["maps"][kind].setdefault(key, [])
+                for e in entries:
+                    if e not in lst:
+                        lst.append(e)
+        info["rows"] = n
+    res["aliases"] = len(aliases)
+    res["names"] = sorted(names_seen)
+    res["ok"] = any(i["used"] for i in res["sheets"])
+    if not res["ok"]:
+        res["error"] = "Hospital table / FSE 시트에서 병원-담당자 정보를 찾지 못했습니다."
+    log(f"담당자 파일 파싱: ok={res['ok']}, 시트={[(i['name'], i['used'], i.get('reason')) for i in res['sheets']]}, "
+        f"이름 {len(names_seen)}명, 별칭 {len(aliases)}")
+    return res
+
+
+def apply_people(fsn_rows, fco_rows, hospitals_unused, people: dict) -> dict:
+    """고객안내문 행에 담당 FSE/영업을 채움. S/N → 장비 ID → 고객코드 → 병원명 순으로 찾음."""
+    stats = Counter()
+    unmatched = Counter()
+    maps = people["maps"]
+    for r in fsn_rows:
+        found = None
+        for kind, key in (("sn", sn_key(r.get("sn", ""))), ("equip", id_key(r.get("eq", ""))),
+                          ("code", id_key(r.get("code", ""))), ("name", hospital_key(r["h"])),
+                          ("name", hospital_key(r.get("hen", "")))):
+            if key and key in maps[kind]:
+                found = (kind, maps[kind][key])
+                break
+        if not found:
+            stats["none"] += 1
+            unmatched[r["h"]] += 1
+            continue
+        kind, entries = found
+        row_mods = mod_tags(r.get("bu", ""))
+        # 모달리티가 맞는 담당자 + 모달리티 표시가 없는 담당자(예: 영업)
+        untagged = [e for e in entries if not e[1]]
+        if row_mods:
+            pick = [e for e in entries if e[1] and set(e[1].split("/")) & row_mods] + untagged
+        else:
+            pick = entries
+        if not pick:
+            stats["mod_mismatch"] += 1
+            continue
+        stats[kind] += 1
+        fse = list(dict.fromkeys(e[2] for e in pick if e[0] == "fse"))
+        sales = list(dict.fromkeys(e[2] for e in pick if e[0] == "sales"))
+        if fse and not r.get("fse"):
+            r["fse"] = ", ".join(fse)
+            r["ppsrc"] = "pm"
+        if sales and not r.get("sales"):
+            r["sales"] = ", ".join(sales)
+            r["ppsrc"] = "pm"
+    return {"stats": dict(stats), "unmatched": [{"name": n, "count": c} for n, c in unmatched.most_common(30)]}
+
 
 def due_band(due, today):
     from dateutil.relativedelta import relativedelta
@@ -813,7 +1093,7 @@ def parse_fco(path: Path, source: str, today: dt.date) -> dict:
 # 대시보드 데이터 만들기 + HTML 생성
 # ---------------------------------------------------------------------------
 
-def build_dashboard_data(fsn_info: dict, fco_infos: list, today: dt.date) -> dict:
+def build_dashboard_data(fsn_info: dict, fco_infos: list, today: dt.date, people_info: dict | None = None) -> dict:
     """fsn_info: {"parse": parse_fsn 결과, "file": {...}} / fco_infos: [{"source","parse","file"}]"""
     fsn_parse = (fsn_info or {}).get("parse") or {}
     fsn_rows = fsn_parse.get("rows", []) if fsn_parse.get("ok") else []
@@ -841,6 +1121,11 @@ def build_dashboard_data(fsn_info: dict, fco_infos: list, today: dt.date) -> dic
             k = hospital_key(r["hen"])  # FCO Account가 영문 이름인 경우
         r["k"] = k or hospital_key(r["h"]) or ("fsn:" + r["h"])
 
+    people_parse = (people_info or {}).get("parse") or {}
+    people_apply = {}
+    if people_parse.get("ok"):
+        people_apply = apply_people(fsn_rows, fco_rows, None, people_parse)
+
     hospitals = {}
     for r in fsn_rows:
         h = hospitals.setdefault(r["k"], {"name": r["h"], "pp": [], "names": []})
@@ -861,6 +1146,13 @@ def build_dashboard_data(fsn_info: dict, fco_infos: list, today: dt.date) -> dic
         for p in pp:
             if p not in h["pp"]:
                 h["pp"].append(p)
+
+    # 담당자 파일의 병원 단위 이름도 병원 담당자 목록에 추가 (영업 담당이 FCO를 볼 때 등)
+    if people_parse.get("ok"):
+        for k, h in hospitals.items():
+            for e in people_parse["maps"]["name"].get(k, []):
+                if e[2] not in h["pp"]:
+                    h["pp"].append(e[2])
 
     matched = len({r["k"] for r in fsn_rows} & fco_keys)
 
@@ -898,6 +1190,16 @@ def build_dashboard_data(fsn_info: dict, fco_infos: list, today: dt.date) -> dic
             "rows": fco_rows,
         },
         "hospitals": hospitals,
+        "people": {
+            "available": bool(people_parse.get("ok")),
+            "error": people_parse.get("error", "") if people_info else "담당자 파일 없음",
+            "file": (people_info or {}).get("file", {}),
+            "sheets": people_parse.get("sheets", []),
+            "aliases": people_parse.get("aliases", 0),
+            "names": len(people_parse.get("names", [])),
+            "stats": people_apply.get("stats", {}),
+            "unmatched": people_apply.get("unmatched", []),
+        },
         "link": {"matchedHospitals": matched, "linkedBySn": linked_by_sn},
     }
     return data
@@ -1509,7 +1811,18 @@ def run_pipeline(force: bool, manual_fsn: Path | None, report, step, stop_event,
             else:
                 fco_plan.append([src, None, False, "", False])
 
-    downloads_needed = need_fsn_download or any(p[4] for p in fco_plan)
+    # ---------- 3. 담당자 파일 (PM Planning) ----------
+    pm_url = cfg.get("pm_url") or PM_SOURCE["url"]
+    pm_cache = DATA_DIR / PM_SOURCE["cache"]
+    pm_path, pm_stale, pm_origin, need_pm = None, False, "", False
+    if pm_cache.exists() and is_today(pm_cache) and not force:
+        pm_path, pm_origin = pm_cache, "오늘 받은 파일"
+    elif pm_url:
+        need_pm = True
+    elif pm_cache.exists():
+        pm_path, pm_stale, pm_origin = pm_cache, True, "이전에 받은 파일"
+
+    downloads_needed = need_fsn_download or any(p[4] for p in fco_plan) or need_pm
     downloader = None
     fsn_fail_reason = ""
     try:
@@ -1564,6 +1877,21 @@ def run_pipeline(force: bool, manual_fsn: Path | None, report, step, stop_event,
                                        if p.exists()], key=lambda p: p.stat().st_mtime, reverse=True)
                     if existing:
                         item[1], item[2], item[3] = existing[0], True, "받기 실패 → 이전 파일"
+
+        if need_pm:
+            step(2, "run", "SharePoint에서 받는 중")
+            got = None
+            if downloader is not None:
+                try:
+                    got = downloader.download(
+                        pm_url, pm_cache, lambda n: "pm" in n.lower() and "planning" in n.lower(),
+                        "담당자 파일(PM Planning)", allow_manual=False)
+                except Exception:
+                    log_exc("담당자 파일 다운로드 실패")
+            if got:
+                pm_path, pm_origin = got, "방금 받은 파일"
+            elif pm_cache.exists():
+                pm_path, pm_stale, pm_origin = pm_cache, True, "받기 실패 → 이전 파일"
     finally:
         if downloader is not None:
             downloader.quit()
@@ -1585,10 +1913,26 @@ def run_pipeline(force: bool, manual_fsn: Path | None, report, step, stop_event,
     else:
         step(1, "ok", " · ".join(p[0] for p in fco_ok))
 
-    # ---------- 3. 대시보드 ----------
+    people_info = None
+    if pm_path:
+        report("담당자 파일을 읽는 중...")
+        meta = read_meta(pm_path)
+        pp_parse = parse_people(pm_path)
+        people_info = {"parse": pp_parse, "file": file_info(pm_path, meta.get("original_name", ""), pm_stale, pm_origin)}
+        d = dt.datetime.fromtimestamp(pm_path.stat().st_mtime).strftime("%m/%d")
+        if not pp_parse.get("ok"):
+            step(2, "warn", "담당자 정보를 찾지 못함 (데이터 정보 탭 확인)")
+        elif pm_stale:
+            step(2, "warn", f"이전 파일 사용 ({d}) · 담당자 {len(pp_parse['names'])}명")
+        else:
+            step(2, "ok", f"담당자 {len(pp_parse['names'])}명")
+    else:
+        step(2, "warn", "담당자 파일 없음 (담당자 없이 진행)")
+
+    # ---------- 4. 대시보드 ----------
     if stop_event.is_set():
         raise RuntimeError("취소되었습니다.")
-    step(2, "run", "데이터 정리 중")
+    step(3, "run", "데이터 정리 중")
     report("엑셀 데이터를 읽는 중...")
     fsn_info = None
     if fsn_path:
@@ -1616,16 +1960,17 @@ def run_pipeline(force: bool, manual_fsn: Path | None, report, step, stop_event,
                    "2) 브라우저에서 파일을 직접 내려받은 뒤 [파일 직접 선택]으로 선택")
         raise RuntimeError(msg)
 
-    data = build_dashboard_data(fsn_info, fco_infos, today)
+    data = build_dashboard_data(fsn_info, fco_infos, today, people_info)
     if not fsn_info:
         data["fsn"]["error"] = "고객안내문 파일을 받지 못했습니다. " + (fsn_fail_reason or "")
     out = render_dashboard(data, DASHBOARD_PATH)
     n_fsn = len(data["fsn"]["rows"])
     n_fco = len(data["fco"]["rows"])
     if fsn_info and not fsn_info["parse"].get("ok"):
-        step(2, "warn", f"고객안내문 읽기 실패 · FCO {n_fco}건")
+        step(3, "warn", f"고객안내문 읽기 실패 · FCO {n_fco}건")
     else:
-        step(2, "ok", f"고객안내문 {n_fsn}건 · FCO {n_fco}건")
+        n_pp = sum(1 for r in data["fsn"]["rows"] if r.get("ppsrc"))
+        step(3, "ok", f"고객안내문 {n_fsn}건 (담당자 연결 {n_pp}건) · FCO {n_fco}건")
     log(f"대시보드 생성: {out}")
     return out
 
@@ -1677,8 +2022,8 @@ def run_gui():
 
     steps_frame = tk.Frame(outer, bg="#ffffff")
     steps_frame.pack(fill="x")
-    step_names = ["고객안내문 파일", "FCO 파일 (MR · XR · CT/AMI)", "대시보드 만들기"]
-    step_icons, step_texts, step_state = [], [], [None, None, None]
+    step_names = ["고객안내문 파일", "FCO 파일 (MR · XR · CT/AMI)", "담당자 파일 (PM Planning)", "대시보드 만들기"]
+    step_icons, step_texts, step_state = [], [], [None] * len(step_names)
     for i, name in enumerate(step_names):
         row = tk.Frame(steps_frame, bg="#ffffff")
         row.pack(fill="x", pady=3)
@@ -1708,7 +2053,7 @@ def run_gui():
             return
         holder["running"] = True
         stop_event.clear()
-        for i in range(3):
+        for i in range(len(step_names)):
             step_state[i] = None
             step_icons[i].configure(text="○", fg="#898781")
             step_texts[i].configure(text="대기", fg="#52514e")
@@ -1823,7 +2168,11 @@ def run_cli(args):
         src, _, path = spec.partition("=")
         p = Path(path)
         fco_infos.append({"source": src, "parse": parse_fco(p, src, today), "file": file_info(p, origin="직접 지정")})
-    data = build_dashboard_data(fsn_info, fco_infos, today)
+    people_info = None
+    if args.people:
+        pth = Path(args.people)
+        people_info = {"parse": parse_people(pth), "file": file_info(pth, origin="직접 지정")}
+    data = build_dashboard_data(fsn_info, fco_infos, today, people_info)
     if args.sample:
         data["sample"] = True
     out = render_dashboard(data, Path(args.out))
@@ -1844,6 +2193,7 @@ def main():
     ap = argparse.ArgumentParser(description=APP_TITLE)
     ap.add_argument("--build", help="(개발용) 고객안내문 엑셀 경로 → HTML 생성")
     ap.add_argument("--fco", action="append", help="(개발용) SOURCE=경로, 예: MR=MR.xlsx")
+    ap.add_argument("--people", help="(개발용) 담당자 파일(PM Planning) 경로")
     ap.add_argument("--out", default=str(DASHBOARD_PATH))
     ap.add_argument("--json", help="(개발용) 데이터 JSON 저장 경로")
     ap.add_argument("--today", help="(개발용) 기준일 YYYY-MM-DD")
@@ -1851,7 +2201,7 @@ def main():
     ap.add_argument("--no-open", action="store_true")
     args = ap.parse_args()
 
-    if args.build or args.fco:
+    if args.build or args.fco or args.people:
         run_cli(args)
         return
     try:

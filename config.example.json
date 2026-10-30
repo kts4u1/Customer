@@ -5,5 +5,10 @@
     "XR": "",
     "CT/AMI": ""
   },
-  "columns": {}
+  "pm_url": "",
+  "columns": {},
+  "skip_sheets": [
+    "삭제",
+    "closed"
+  ]
 }

@@ -26,7 +26,7 @@ HTML 대시보드(`~/FSN_Dashboard/FSN_FCO_Dashboard.html`)를 만들고 Edge로
 - 개발용 CLI: `python main.py --build 고객안내문.xlsx --fco "MR=MR FCO Action Plan.xlsx" --out test.html --today 2026-10-23 --sample --no-open`
 
 ## 진행 창 (Tkinter) 흐름
-1. 고객안내문 파일 → 2. FCO 파일 (MR · XR · CT/AMI) → 3. 대시보드 만들기. 단계별로 ✔ / ! / ✖ 표시.
+1. 고객안내문 파일 → 2. FCO 파일 (MR · XR · CT/AMI) → 3. 담당자 파일 (PM Planning) → 4. 대시보드 만들기. 단계별로 ✔ / ! / ✖ 표시.
 - 버튼: 대시보드 열기 / 새로 받기(오늘 받은 파일이 있어도 다시 받기) / 파일 직접 선택(다운로드 실패 시) / 폴더 열기 / 닫기.
 - 오늘 받은 파일이 있으면 받지 않고 재사용합니다. 받기 실패 시 이전 파일로 진행하고 "!"와 파일 날짜를 표시합니다.
 
@@ -70,6 +70,19 @@ HTML 대시보드(`~/FSN_Dashboard/FSN_FCO_Dashboard.html`)를 만들고 Edge로
 - 받기 실패 시: 오늘 받은 파일 → 기존 FCO 프로그램 캐시 `~/FCO_Action_Plan/…xlsx`(읽기만) → 이전 파일 순으로 사용.
 - 병원 연결: 병원명 정규화(`hospital_key`: 공백·(재)·의료법인 등 제거) + 장비 S/N이 같으면 같은 병원 + FCO Account가 영문이면 영문병원명으로도 연결.
 
+### 담당자 파일 (PM Planning) — 2026-10-30 추가, 실제 구조 미확인
+- 사용자 요청: "Hospital table"과 "FSE" 탭에 담당자 이름이 있으니 이걸로 고객안내문 대시보드의 담당자를 채울 것.
+- URL(`PM_SOURCE`): `share.philips.com/:x:/r/sites/HS_CS_RPTeam/_layouts/15/Doc.aspx?sourcedoc={1BF6D0D9-2A63-41B5-B38A-D8E52C403F5E}&file=★MASTER★ 2025 CT MR XR PM Planning.xlsx`
+  → FCO와 같이 download.aspx?UniqueId=…로 받음. 캐시 `~/FSN_Dashboard/data/PM_Planning_master.xlsx`. config `pm_url`.
+- 파서 `parse_people` (read_only로 이름에 hospital/병원/fse/담당이 들어간 시트만 읽음):
+  연결 칸(`PEOPLE_KEYS`: 병원명 국문/영문, S/N, 장비 ID, 고객코드, 모달리티, 지역) + 담당자 칸(헤더에 FSE/담당/엔지니어/Sales/영업/이름…,
+  또는 헤더가 "MR"/"CT"/"XR"뿐이고 값이 사람 이름처럼 보이는 칸). 헤더의 MR/CT/XR → 그 모달리티 담당. Sales/영업 → 영업.
+  FSE 시트(한글 이름 + 영문명/사번)는 별칭표로 써서 영문 이름을 한글 이름으로 바꿈.
+- 적용 `apply_people`: 고객안내문 행마다 S/N → 장비 ID → 고객코드 → 병원명 순으로 찾고, 행의 시트(MR/CT/IGT…)와 모달리티가 맞는 FSE + 모달리티 없는 담당자(영업)를 넣음.
+  (XR = DXR/IGT로 취급, `MOD_CANON`). 고객안내문 파일에 이미 담당자가 있으면 덮어쓰지 않음. `r["ppsrc"]="pm"` 표시.
+- 진행 창 3단계 "담당자 파일 (PM Planning)" 추가 → 대시보드는 4단계. [데이터 정보] 탭에 연결 결과/못 찾은 병원/읽은 칸 표시.
+- **다음 할 일: 사용자 [데이터 정보] 탭 캡처로 Hospital table/FSE 시트의 실제 칸 이름을 확인하고 규칙 조정.**
+
 ## 자동 다운로드 (EdgeDownloader) — 회사 PC에서 동작 확인 완료
 - Edge(Windows 계정 SSO) + Selenium. 프로필 `~/FSN_Dashboard/browser_profile`(잠겨 있으면 `browser_profile_2`로 재시도), 다운로드 폴더 `~/FSN_Dashboard/downloads`.
 - 순서:
@@ -103,6 +116,7 @@ HTML 대시보드(`~/FSN_Dashboard/FSN_FCO_Dashboard.html`)를 만들고 Edge로
   - BU별 화면: 사용자에게 BU별 지역 목록을 받으면 '지역' 컬럼 → BU 매핑 후 `SHOW_BU = true`.
   - 전달방법별 화면: 등기/직접전달/이메일 정보가 확정되면 `SHOW_METHOD = true`(어느 컬럼인지 확인 필요).
   - 실제 파일 [데이터 정보] 탭으로 컬럼 매핑·판정 값 재확인.
+  - 담당자 파일(PM Planning) 실제 칸 구조 확인 후 `PEOPLE_KEYS`/담당자 칸 규칙 조정.
 - 부가 산출물: 발표용 5장 슬라이드(claude.ai 아티팩트 "고객안내문 · FCO 통합 Dashboard 소개" https://claude.ai/artifact/HTUvLJhYF14XQjUuVaRzZU). 5장 대시보드 캡처는 샘플 데이터 화면.
 
 ## 시작 방법

@@ -60,27 +60,37 @@ BU별 / C&R별 / 전달방법(등기·직접전달·이메일)별 전달 상황�
   만들어진 HTML 파일(FSN_FCO_Dashboard.html)은 그대로 메일로 보내도 열립니다.
 
 
-5. FCO 데이터
+5. 담당자 데이터 (PM Planning)
+-------------------------------
+  ★MASTER★ 2025 CT MR XR PM Planning.xlsx 의 "Hospital table" / "FSE" 시트에서
+  병원·장비별 담당 FSE / 영업 이름을 읽어 고객안내문 행에 넣습니다.
+  연결 순서: S/N → 장비 ID → 고객코드 → 병원명(국문/영문). FSE 시트의 영문명·사번은 한글 이름으로 바꿉니다.
+  결과는 대시보드 [데이터 정보] 탭 "담당자 파일" 부분에서 확인합니다.
+
+
+6. FCO 데이터
 --------------
   FCO 주소가 설정되지 않은 경우, 기존 FCO 프로그램(FCO.exe)이 받아 둔 파일
   (%USERPROFILE%\FCO_Action_Plan\*.xlsx)을 자동으로 같이 씁니다.
   오늘 받은 파일이 아니면 대시보드 위쪽에 "이전 파일" 안내가 나옵니다.
 
 
-6. 설정 파일 (선택)
+7. 설정 파일 (선택)
 --------------------
   %USERPROFILE%\FSN_Dashboard\config.json 을 만들면 다시 빌드하지 않고 바꿀 수 있습니다.
   (config.example.json 참고)
 
     "fsn_url"   고객안내문 파일 주소
     "fco_urls"  FCO 파일 주소 (MR / XR / CT/AMI)
+    "pm_url"    담당자 파일(PM Planning) 주소
+    "skip_sheets" 읽지 않을 시트 이름에 들어간 단어 (기본: 삭제, closed)
     "columns"   컬럼 이름을 직접 지정 (자동 인식이 틀릴 때)
                 예: {"hospital": "병원명", "status": "전달여부", "method": "전달방법"}
                 항목 이름: hospital, bu, cr, method, status, date, fsn, fsn_title, fse, sales,
                            sn, system, site, region, reply, remark, fco
 
 
-7. 문제 해결
+8. 문제 해결
 -------------
   - 오류가 나면 메시지 창이 뜨고 %USERPROFILE%\FSN_Dashboard\debug_log.txt 에 기록됩니다.
   - 전달 완료/미전달 숫자가 이상하면 대시보드 [데이터 정보] 탭을 캡처해서 보내 주세요.

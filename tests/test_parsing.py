@@ -177,6 +177,53 @@ def test_real_layout_korean_names():
         assert [x["s"] for x in r["rows"] if x["bu"] == "MR"] == [1, 1, 0]
 
 
+def _make_pm(path):
+    """PM Planning 파일 모양 가정: Hospital table(병원 × 모달리티별 FSE) + FSE 명단(영문명 → 한글 이름)"""
+    import openpyxl
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "PM Plan 2025"
+    ws.append(["S/N", "Jan", "Feb"])
+    ws.append(["62030", "PM", ""])
+    h = wb.create_sheet("Hospital table")
+    h.append(["2025 담당 병원표"])
+    h.append(["고객코드", "병원명", "영문병원명", "지역", "MR", "CT", "XR", "Sales"])
+    h.append(["1001", "동국대학교병원", "DONGKOOK UNIV", "Central", "김민준", "이서연", "", "윤서준"])
+    h.append(["1002", "혜민병원", "HYEMIN HOSP", "Central", "Minjun Kim", "", "정하늘", "장미래"])
+    h.append(["1003", "", "KOREA UNIV", "JR", "Jihoon Park", "최유진", "", ""])
+    f = wb.create_sheet("FSE")
+    f.append(["이름", "영문명", "사번", "Modality", "지역"])
+    f.append(["김민준", "Minjun Kim", "K001", "MR", "Central"])
+    f.append(["박지훈", "Jihoon Park", "K002", "MR", "JR"])
+    f.append(["이서연", "Seoyeon Lee", "K003", "CT", "Central"])
+    wb.save(path)
+
+
+def test_people_mapping():
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        _make_pm(tmp / "pm.xlsx")
+        pp = main.parse_people(tmp / "pm.xlsx")
+        assert pp["ok"], pp["error"]
+        used = [x["name"] for x in pp["sheets"] if x["used"]]
+        assert used == ["Hospital table"], pp["sheets"]
+        assert pp["aliases"] >= 3
+        rows = [
+            {"h": "동국대학교병원", "hen": "", "bu": "MR", "sn": "", "eq": "", "code": "", "fse": "", "sales": ""},
+            {"h": "동국대학교병원", "hen": "", "bu": "CT", "sn": "", "eq": "", "code": "", "fse": "", "sales": ""},
+            {"h": "혜민", "hen": "", "bu": "MR", "sn": "", "eq": "", "code": "1002", "fse": "", "sales": ""},
+            {"h": "KOREA UNIV", "hen": "", "bu": "MR", "sn": "", "eq": "", "code": "", "fse": "", "sales": ""},
+            {"h": "없는병원", "hen": "", "bu": "MR", "sn": "", "eq": "", "code": "", "fse": "", "sales": ""},
+        ]
+        res = main.apply_people(rows, [], None, pp)
+        assert rows[0]["fse"] == "김민준" and rows[0]["sales"] == "윤서준", rows[0]
+        assert rows[1]["fse"] == "이서연", rows[1]
+        assert rows[2]["fse"] == "김민준", rows[2]          # 고객코드로 연결 + 영문명 → 한글 이름
+        assert rows[3]["fse"] == "박지훈", rows[3]          # 영문병원명으로 연결
+        assert rows[4]["fse"] == "" and res["stats"]["none"] == 1
+        assert res["stats"]["code"] == 1 and res["stats"]["name"] == 3
+
+
 def test_download_urls():
     fco = main.FCO_SOURCES["MR"]["url"]
     assert main.add_download_param(fco) == (
@@ -207,15 +254,20 @@ def test_pipeline_manual_file():
             saved_urls = {k: v["url"] for k, v in main.FCO_SOURCES.items()}
             for v in main.FCO_SOURCES.values():
                 v["url"] = ""  # 테스트에서는 Edge로 받지 않음
+            saved_pm = main.PM_SOURCE["url"]
+            main.PM_SOURCE["url"] = ""
             main.FCO_APP_DIR.mkdir()
             (tmp / "MR FCO Action Plan.xlsx").replace(main.FCO_APP_DIR / "MR_FCO_Action_Plan.xlsx")
             steps = []
             out = main.run_pipeline(False, tmp / "A.xlsx", lambda t: None, lambda i, s, t: steps.append((i, s)),
                                     threading.Event(), {})
             assert out.exists()
-            assert (0, "run") in steps and (2, "ok") in steps, steps
+            assert (0, "run") in steps and (3, "ok") in steps, steps
+            assert (2, "warn") in steps, steps  # 담당자 파일 없음 → 경고만
             assert (main.DATA_DIR / main.FSN_SOURCE["cache"]).exists()
         finally:
+            if "saved_pm" in dir():
+                main.PM_SOURCE["url"] = saved_pm
             for k, v in main.FCO_SOURCES.items():
                 v["url"] = saved_urls.get(k, v["url"]) if "saved_urls" in dir() else v["url"]
             (main.APP_DIR, main.DATA_DIR, main.DOWNLOAD_DIR, main.LOG_PATH, main.DASHBOARD_PATH,

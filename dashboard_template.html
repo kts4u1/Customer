@@ -787,7 +787,8 @@ function viewFsn() {
   if (FSN_HAS.cr) cards.append(card('C&R별', '미전달이 많은 순', completionList(groupFsn(rows, crLabel), { id: 'fsn-cr', active: S.cr, onClick: k => { S.cr = S.cr === k ? '' : k; render(); } })));
   if (SHOW_METHOD) cards.append(card('전달방법별', '등기 · 직접전달 · 이메일', completionList(groupFsn(rows, methodLabel), { id: 'fsn-m', active: S.method, onClick: k => { S.method = S.method === k ? '' : k; render(); } })));
   if (FSN_HAS.fsn && !FSN_HAS.cr) cards.append(card('FSN별', '미전달이 많은 순', completionList(groupFsn(rows, fsnLabel), { id: 'fsn-id', active: S.fsnId, onClick: k => { S.fsnId = S.fsnId === k ? '' : k; render(); } })));
-  if (FSN_HAS.fse) cards.append(card('담당 FSE별', '누르면 담당자 필터 적용', completionList(groupFsn(rows, r => r._fse.length ? r._fse : ['(미지정)']), { id: 'fsn-fse', active: S.person, onClick: k => { if (k !== '(미지정)') { S.person = S.person === k ? '' : k; render(); } } })));
+  const PP_FROM_PM = FSN.some(r => r.ppsrc === 'pm');
+  if (FSN_HAS.fse) cards.append(card('담당 FSE별', PP_FROM_PM ? '담당자 파일(PM Planning) 기준 · 누르면 담당자 필터 적용' : '누르면 담당자 필터 적용', completionList(groupFsn(rows, r => r._fse.length ? r._fse : ['(미지정)']), { id: 'fsn-fse', active: S.person, onClick: k => { if (k !== '(미지정)') { S.person = S.person === k ? '' : k; render(); } } })));
   if (FSN_HAS.sales) cards.append(card('영업 담당별', '누르면 담당자 필터 적용', completionList(groupFsn(rows, r => r._sales.length ? r._sales : ['(미지정)']), { id: 'fsn-sales', active: S.person, onClick: k => { if (k !== '(미지정)') { S.person = S.person === k ? '' : k; render(); } } })));
   if (!FSN_HAS.fse && !FSN_HAS.sales && FCO_OK) {
     cards.append(card('담당 FSE별 (FCO 기준)', '고객안내문 파일에 담당자가 없어 FCO 파일의 병원별 FSE로 묶음',
@@ -970,7 +971,7 @@ function viewHosp() {
 
 /* ---------- 데이터 정보 ---------- */
 const FIELD_KO = {
-  hospital: '병원 (국문)', hospital2: '병원 (국문, 대안)', hospital_en: '병원 (영문, 마지막 대안)', site: 'Site', bu: 'BU', cr: 'C&R', fsn: 'FSN 번호', fsn_title: 'FSN 제목', fco: '관련 FCO',
+  hospital: '병원 (국문)', hospital2: '병원 (국문, 대안)', hospital_en: '병원 (영문, 마지막 대안)', equip: '장비 ID', code: '고객코드', modality: '모달리티', region: '지역', site: 'Site', bu: 'BU', cr: 'C&R', fsn: 'FSN 번호', fsn_title: 'FSN 제목', fco: '관련 FCO',
   method: '전달방법', status: '전달여부', date: '전달일', reply: '회신', fse: 'FSE', sales: '영업', sn: 'S/N',
   system: '장비', region: '지역', remark: '비고',
   due: 'Due Date', title: 'FCO Title', sysdesc: 'System Code Description', syscode: 'System Code', account: 'Account',
@@ -982,10 +983,10 @@ const FCO_FIELD_KO = {
   status: 'Status', rel: '고객안내문 관련', remark: 'Remark',
 };
 const STATE_KO = { done: '완료', todo: '미전달', excluded: '집계 제외', unknown: '해석 못함 → 미전달', empty: '빈칸' };
-function simpleTable(head, rows) {
+function simpleTable(head, rows, wrap) {
   return h('div', { class: 'tbl-wrap', style: 'max-height:none' }, h('table', null,
     h('thead', null, h('tr', null, head.map(t => h('th', { text: t, style: 'cursor:default' })))),
-    h('tbody', null, rows.map(r => h('tr', null, r.map(c => h('td', null, c)))))));
+    h('tbody', null, rows.map(r => h('tr', null, r.map(c => h('td', { style: wrap ? 'white-space:normal' : null }, c)))))));
 }
 function fileState(f) {
   if (!f || !f.name) return '없음';
@@ -1000,6 +1001,7 @@ function viewInfo() {
   out.push(h('div', { class: 'section-title', text: '사용한 파일' }));
   const fileRows = [];
   if (D.fsn) fileRows.push(['고객안내문', (D.fsn.file && D.fsn.file.name) || '-', (D.fsn.file && D.fsn.file.time) || '-', fileState(D.fsn.file), FSN_OK ? fmt(FSN.length) + '건' : (D.fsn.error || '실패')]);
+  if (D.people && D.people.file && D.people.file.name) fileRows.push(['담당자 (PM Planning)', D.people.file.name, D.people.file.time || '-', fileState(D.people.file), D.people.available ? '담당자 ' + fmt(D.people.names) + '명' : (D.people.error || '실패')]);
   (D.fco.sources || []).forEach(s => fileRows.push(['FCO ' + s.name, (s.file && s.file.name) || '-', (s.file && s.file.time) || '-', fileState(s.file), s.ok ? fmt(s.count) + '건 (Closed ' + fmt(s.closed) + '건 제외)' : (s.error || '없음')]));
   out.push(simpleTable(['구분', '파일', '파일 시각', '상태', '결과'], fileRows));
 
@@ -1029,6 +1031,32 @@ function viewInfo() {
   });
   out.push(h('div', { class: 'section-title', text: '인식 결과' }));
   out.push(cards);
+
+  // 담당자 파일 (PM Planning)
+  const P = D.people || {};
+  out.push(h('div', { class: 'section-title', text: '담당자 파일 (PM Planning)' }));
+  if (!P.available) {
+    out.push(h('div', { class: 'card' }, h('p', { class: 'sub', style: 'margin:0', text: (P.error || '담당자 파일 없음') + ' — 이 경우 담당자는 고객안내문/FCO 파일에 있는 이름만 씁니다.' })));
+  }
+  if (P.file && P.file.name) {
+    const st = P.stats || {};
+    const KIND_KO = { sn: 'S/N으로 연결', equip: '장비 ID로 연결', code: '고객코드로 연결', name: '병원명으로 연결', mod_mismatch: '병원은 찾았지만 모달리티가 다름', none: '연결 못 함' };
+    const pcards = h('div', { class: 'cards' });
+    pcards.append(h('div', { class: 'card' }, h('h3', { text: '연결 결과' }),
+      h('p', { class: 'sub', text: (P.file.name || '') + ' · ' + (P.file.time || '') + ' · 담당자 ' + fmt(P.names || 0) + '명 · 별칭 ' + fmt(P.aliases || 0) + '개' }),
+      simpleTable(['고객안내문 행', '건수'], Object.keys(KIND_KO).filter(k => st[k]).map(k => [KIND_KO[k], fmt(st[k])]))));
+    if ((P.unmatched || []).length) {
+      pcards.append(h('div', { class: 'card' }, h('h3', { text: '담당자를 못 찾은 병원 (상위 30)' }), h('p', { class: 'sub', text: '병원명 표기가 다르면 S/N·장비 ID·고객코드로 연결합니다' }),
+        simpleTable(['병원', '행 수'], P.unmatched.map(u => [u.name, fmt(u.count)]))));
+    }
+    out.push(pcards);
+    out.push(h('div', { class: 'card', style: 'margin-top:12px' }, h('h3', { text: '담당자 파일에서 읽은 시트와 칸' }), h('p', { class: 'sub', text: '연결 칸(병원/S/N/고객코드) → 담당자 칸' }),
+      simpleTable(['시트', '사용', '연결 칸', '담당자 칸', '비고'], (P.sheets || []).map(x => [
+        x.name, x.used ? '✓' : '',
+        Object.keys(x.keys || {}).map(k => (FIELD_KO[k] || k) + ': ' + x.keys[k]).join(', '),
+        (x.people || []).map(pc => pc.header + ' (' + (pc.role === 'sales' ? '영업' : 'FSE') + (pc.mod ? ' ' + pc.mod : '') + ')').join(', '),
+        x.reason || (x.used ? fmt(x.rows) + '행' : '')]), true)));
+  }
 
   out.push(h('div', { class: 'section-title', text: '고객안내문 ↔ FCO 연결' }));
   out.push(h('div', { class: 'card' }, h('dl', { class: 'kv' },
@@ -1100,10 +1128,12 @@ function renderHeader() {
   if (D.fsn && D.fsn.file && D.fsn.file.name) parts.push('고객안내문 ' + D.fsn.file.time);
   const fcoT = (D.fco.sources || []).filter(s => s.ok).map(s => s.name + ' ' + ((s.file && s.file.time) || '').slice(5));
   if (fcoT.length) parts.push('FCO ' + fcoT.join(', '));
+  if (D.people && D.people.available && D.people.file) parts.push('담당자 ' + (D.people.file.time || ''));
   document.getElementById('metaLine').textContent = parts.join(' · ');
   const banners = [];
   if (D.sample) banners.push('샘플 데이터로 만든 화면입니다. 실제 데이터가 아닙니다.');
   if (D.fsn && D.fsn.file && D.fsn.file.stale) banners.push('⚠ 고객안내문 파일을 새로 받지 못해 ' + D.fsn.file.time + ' 파일로 보여줍니다.');
+  if (D.people && D.people.available && D.people.file && D.people.file.stale) banners.push('⚠ 담당자 파일(PM Planning)은 ' + D.people.file.time + ' 파일입니다 (오늘 받은 파일 아님).');
   (D.fco.sources || []).filter(s => s.ok && s.file && s.file.stale).forEach(s => banners.push('⚠ FCO ' + s.name + '은(는) ' + s.file.time + ' 파일입니다 (오늘 받은 파일 아님).'));
   if (D.fsn && D.fsn.warnings && D.fsn.warnings.length) banners.push('ⓘ 고객안내문 읽기 참고사항 ' + D.fsn.warnings.length + '개 — 데이터 정보 탭 확인');
   setKids(document.getElementById('banner'), banners.map(b => h('div', { text: b })));
