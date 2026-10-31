@@ -384,21 +384,75 @@ def match_columns(header_cells, spec, overrides=None):
     return assigned
 
 
-def read_sheet_grids(ws):
-    """(모든 병합 채움 grid, 세로 병합만 채운 grid) 반환. grid[r][c] 0-based."""
-    raw = [list(r) for r in ws.iter_rows(values_only=True)]
+class SheetMerges:
+    """read_only 모드에선 병합 정보가 없어서, 엑셀(zip) 안의 시트 XML에서 mergeCell만 직접 읽음."""
+
+    def __init__(self, path: Path):
+        self.path = path
+        self.targets = {}
+        try:
+            with zipfile.ZipFile(path) as z:
+                wbx = z.read("xl/workbook.xml").decode("utf-8", "ignore")
+                rels = z.read("xl/_rels/workbook.xml.rels").decode("utf-8", "ignore")
+            rid_target = {}
+            for m in re.finditer(r"<(?:\w+:)?Relationship\b[^>]*>", rels):
+                tag = m.group(0)
+                i = re.search(r'\bId="([^"]+)"', tag)
+                t = re.search(r'\bTarget="([^"]+)"', tag)
+                if i and t:
+                    rid_target[i.group(1)] = t.group(1)
+            for m in re.finditer(r"<(?:\w+:)?sheet\b[^>]*>", wbx):
+                tag = m.group(0)
+                name = re.search(r'\bname="([^"]*)"', tag)
+                rid = re.search(r'\br:id="([^"]+)"', tag) or re.search(r'\b\w+:id="([^"]+)"', tag)
+                if name and rid and rid.group(1) in rid_target:
+                    t = rid_target[rid.group(1)].lstrip("/")
+                    if not t.startswith("xl/"):
+                        t = "xl/" + t
+                    from html import unescape
+                    self.targets[unescape(name.group(1))] = t
+        except Exception:
+            log_exc("병합 정보 읽기 준비 실패")
+
+    def get(self, title: str) -> list:
+        """[(r0, c0, r1, c1)] 1부터 시작"""
+        t = self.targets.get(title)
+        if not t:
+            return []
+        try:
+            from openpyxl.utils.cell import range_boundaries
+            with zipfile.ZipFile(self.path) as z:
+                xml = z.read(t).decode("utf-8", "ignore")
+            out = []
+            for ref in re.findall(r'<(?:\w+:)?mergeCell\s+ref="([^"]+)"', xml):
+                c0, r0, c1, r1 = range_boundaries(ref)
+                out.append((r0, c0, r1, c1))
+            return out
+        except Exception:
+            log_exc(f"병합 정보 읽기 실패: {title}")
+            return []
+
+
+def sheet_rows(ws):
+    """read_only 시트의 행을 값 목록으로 하나씩 (시트 크기 정보가 틀려도 끝까지 읽도록)"""
+    try:
+        ws.reset_dimensions()
+    except Exception:
+        pass
+    for r in ws.iter_rows(values_only=True):
+        yield list(r)
+
+
+def fill_merges(raw, ranges):
+    """(모든 병합 채움 grid, 세로 병합만 채운 grid) 반환. ranges = [(r0, c0, r1, c1)] 1부터."""
     width = max((len(r) for r in raw), default=0)
     for r in raw:
         if len(r) < width:
             r.extend([None] * (width - len(r)))
     grid_all = [list(r) for r in raw]
     grid_vert = [list(r) for r in raw]
-    try:
-        ranges = list(ws.merged_cells.ranges)
-    except Exception:
-        ranges = []
-    for rng in ranges:
-        r0, c0, r1, c1 = rng.min_row - 1, rng.min_col - 1, rng.max_row - 1, rng.max_col - 1
+    for rr0, cc0, rr1, cc1 in ranges:
+        r0, c0, r1, c1 = rr0 - 1, cc0 - 1, rr1 - 1, cc1 - 1
         if r0 >= len(raw) or c0 >= width:
             continue
         v = raw[r0][c0]
@@ -551,11 +605,12 @@ def parse_fsn(path: Path, overrides=None, skip_sheets=None) -> dict:
            "excluded": 0, "skipped": 0, "unknown_status": 0, "warnings": [], "fsn_from_sheet": False,
            "fields": {}}
     try:
-        wb = openpyxl.load_workbook(path, data_only=True)
+        wb = openpyxl.load_workbook(path, data_only=True, read_only=True)
     except Exception as e:
         res["error"] = f"엑셀 파일을 열 수 없습니다: {e}"
         log_exc("FSN 파일 열기 실패")
         return res
+    merges = SheetMerges(path)
 
     candidates = []
     skip_words = [norm_header(w) for w in (skip_sheets if skip_sheets is not None else SKIP_SHEET_WORDS)]
@@ -569,19 +624,25 @@ def parse_fsn(path: Path, overrides=None, skip_sheets=None) -> dict:
             info["reason"] = "시트 이름으로 제외 (삭제예정/Closed 등)"
             continue
         try:
-            grid_all, grid_vert = read_sheet_grids(ws)
+            rows_it = sheet_rows(ws)
+            head = [r for _, r in zip(range(30), rows_it)]
+            ranges = merges.get(ws.title)
+            head_all, _ = fill_merges([list(r) for r in head], ranges)
+            # 앞 30행만 보고 데이터 시트인지 판단 → 아니면 나머지는 읽지 않음 (속도)
+            hdr = detect_header(head_all, FSN_FIELDS, required=[HOSP_FIELDS], overrides=overrides)
+            if not hdr:
+                info["reason"] = "병원 컬럼을 찾지 못함"
+                continue
+            m = hdr["mapping"]
+            if not (("status" in m) or ("method" in m) or ("date" in m) or hdr["wide"]):
+                info["reason"] = "전달여부/전달방법/전달일 컬럼을 찾지 못함"
+                info["header_row"] = hdr["header_row"] + 1
+                info["mapping"] = {f: hdr["headers"][c][1] for f, c in m.items()}
+                continue
+            grid_all, grid_vert = fill_merges(head + list(rows_it), ranges)
         except Exception as e:
+            log_exc(f"시트 읽기 실패: {ws.title}")
             info["reason"] = f"읽기 실패: {e}"
-            continue
-        hdr = detect_header(grid_all, FSN_FIELDS, required=[HOSP_FIELDS], overrides=overrides)
-        if not hdr:
-            info["reason"] = "병원 컬럼을 찾지 못함"
-            continue
-        m = hdr["mapping"]
-        if not (("status" in m) or ("method" in m) or ("date" in m) or hdr["wide"]):
-            info["reason"] = "전달여부/전달방법/전달일 컬럼을 찾지 못함"
-            info["header_row"] = hdr["header_row"] + 1
-            info["mapping"] = {f: hdr["headers"][c][1] for f, c in m.items()}
             continue
         data_rows = sum(1 for row in grid_vert[hdr["header_row"] + 1:] if row_hospital(row, m))
         info.update({"header_row": hdr["header_row"] + 1, "score": hdr["score"], "data_rows": data_rows,
@@ -589,6 +650,10 @@ def parse_fsn(path: Path, overrides=None, skip_sheets=None) -> dict:
                      "wide": {hdr["headers"][c][1]: v for c, v in hdr["wide"].items()}})
         candidates.append((ws, info, hdr, grid_vert))
 
+    try:
+        wb.close()
+    except Exception:
+        pass
     if not candidates:
         res["error"] = "고객안내문 데이터 시트를 찾지 못했습니다. (병원명 + 전달여부/전달방법 컬럼이 필요합니다)"
         return res
@@ -894,12 +959,26 @@ def parse_people(path: Path, extra_roster=None) -> dict:
                                                     for w in ("hospital", "병원", "fse", "담당"))}
         grids = []
         for ws in sheets:
-            grid = []
-            for i, r in enumerate(ws.iter_rows(values_only=True)):
+            rows_it = sheet_rows(ws)
+            head = [r for _, r in zip(range(30), rows_it)]
+            is_w = ws.title in wanted
+            if not is_w:
+                # 이름이 대상이 아닌 시트는 앞 30행에 S/N·장비 ID 칸이 있을 때만 끝까지 읽음 (속도)
+                has_key = False
+                for r in head:
+                    k = match_columns([(c, clean_text(v)) for c, v in enumerate(r)], PEOPLE_KEYS)
+                    if "sn" in k or "equip" in k:
+                        has_key = True
+                        break
+                if not has_key:
+                    grids.append((ws.title, head, False))
+                    continue
+            grid = head
+            for i, r in enumerate(rows_it):
                 if i >= 60000:
                     break
-                grid.append(list(r))
-            grids.append((ws.title, grid, ws.title in wanted))
+                grid.append(r)
+            grids.append((ws.title, grid, is_w))
     finally:
         try:
             wb.close()
@@ -1212,12 +1291,11 @@ def parse_fco(path: Path, source: str, today: dt.date) -> dict:
         for ws in wb.worksheets:
             if getattr(ws, "sheet_state", "visible") != "visible":
                 continue
-            grid = []
-            for i, r in enumerate(ws.iter_rows(values_only=True)):
-                grid.append(list(r))
-            hdr = detect_header(grid, FCO_FIELDS, required=[("fco",), ("due", "fse", "account")])
+            rows_it = sheet_rows(ws)
+            head = [r for _, r in zip(range(30), rows_it)]
+            hdr = detect_header(head, FCO_FIELDS, required=[("fco",), ("due", "fse", "account")])
             if hdr and (best is None or hdr["score"] > best[1]["score"]):
-                best = (ws.title, hdr, grid)
+                best = (ws.title, hdr, head + list(rows_it))
     finally:
         try:
             wb.close()
@@ -1612,6 +1690,27 @@ fetch(arguments[0], {credentials: 'include', redirect: 'follow'}).then(async r =
 }).catch(e => done({ok: false, error: String(e)}));
 """
 
+# 같은 사이트의 여러 파일을 한꺼번에(동시에) 받아 페이지 안에 보관 → 하나씩 꺼내 감
+FETCH_MANY_START_JS = r"""
+const urls = arguments[0];
+const done = arguments[arguments.length - 1];
+window.__fsnDl = new Array(urls.length);
+Promise.all(urls.map((u, i) => fetch(u, {credentials: 'include', redirect: 'follow'}).then(async r => {
+  const buf = new Uint8Array(await r.arrayBuffer());
+  window.__fsnDl[i] = buf;
+  return {ok: r.ok, status: r.status, cd: r.headers.get('content-disposition') || '', size: buf.length, url: r.url,
+          pk: buf.length > 1 && buf[0] === 0x50 && buf[1] === 0x4b};
+}).catch(e => ({ok: false, error: String(e)})))).then(done);
+"""
+FETCH_MANY_GET_JS = r"""
+const buf = window.__fsnDl && window.__fsnDl[arguments[0]];
+if (!buf) return null;
+let bin = '';
+for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
+window.__fsnDl[arguments[0]] = null;
+return btoa(bin);
+"""
+
 FILE_TEXTS = ["File", "파일"]
 COPY_TEXTS = ["Create a Copy", "Save As", "Save a Copy", "복사본 만들기", "다른 이름으로 저장", "복사본 저장"]
 DOWNLOAD_TEXTS = ["Download a Copy", "복사본 다운로드", "Download a copy to your device", "Download"]
@@ -1857,6 +1956,80 @@ class EdgeDownloader:
             self._click(el)
         return True
 
+    def _open_host(self, url: str, label: str):
+        """파일 화면을 열어 로그인(SSO)을 마치고 그 사이트 주소에 머무를 때까지 기다림"""
+        from urllib.parse import urlparse
+        self.report(f"{label}: 로그인 확인 중...")
+        self._get(url)
+        self._wait_login(label)
+        host = urlparse(url).netloc.lower()
+        end = time.time() + 60
+        while time.time() < end and not self.stop_event.is_set():
+            if urlparse(self._current_url()).netloc.lower() == host:
+                break
+            time.sleep(0.5)
+        try:
+            self.driver.switch_to.default_content()
+        except Exception:
+            pass
+
+    def _save_fetched(self, data: bytes, cd: str, dest: Path, label: str) -> Path | None:
+        from urllib.parse import unquote
+        if not data.startswith(b"PK"):
+            log(f"{label}: 받은 내용이 엑셀이 아님 ({len(data):,} bytes)")
+            return None
+        name = ""
+        m = re.search(r"filename\*=(?:UTF-8|utf-8)''([^;]+)", cd or "") or re.search(r'filename="?([^";]+)"?', cd or "")
+        if m:
+            name = unquote(m.group(1)).strip()
+        name = re.sub(r'[\\/:*?"<>|]+', "_", name) or "download.xlsx"
+        if not name.lower().endswith(EXCEL_EXTS):
+            name += ".xlsx"
+        DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
+        tmp = DOWNLOAD_DIR / name
+        tmp.write_bytes(data)
+        log(f"{label}: 받기 성공 {len(data):,} bytes, {name}")
+        return store_download(tmp, dest)
+
+    def fetch_many(self, jobs: list) -> dict:
+        """jobs: [{"key","label","url","dest"}] → {key: 저장 경로}. 사이트(host)마다 한 번만 열고 파일은 동시에 받음."""
+        import base64
+        from urllib.parse import urlparse
+        if self.driver is None:
+            self.start()
+        groups = OrderedDict()
+        for j in jobs:
+            groups.setdefault(urlparse(j["url"]).netloc.lower(), []).append(j)
+        got = {}
+        for host, items in groups.items():
+            if self.stop_event.is_set():
+                break
+            self._open_host(items[0]["url"], items[0]["label"])
+            names = ", ".join(j["label"] for j in items)
+            self.report(f"파일 받는 중 (동시에 {len(items)}개): {names}")
+            t = time.time()
+            try:
+                self.driver.set_script_timeout(300)
+                metas = self.driver.execute_async_script(FETCH_MANY_START_JS, [add_download_param(j["url"]) for j in items])
+            except Exception as e:
+                log(f"동시 받기 실패({host}) {type(e).__name__}: {str(e)[:200]}")
+                continue
+            for i, j in enumerate(items):
+                meta = metas[i] if isinstance(metas, list) and i < len(metas) else None
+                if not isinstance(meta, dict) or not meta.get("pk"):
+                    log(f"{j['label']}: 받기 실패 {meta}")
+                    continue
+                try:
+                    b64 = self.driver.execute_script(FETCH_MANY_GET_JS, i)
+                    path = self._save_fetched(base64.b64decode(b64 or ""), meta.get("cd", ""), j["dest"], j["label"])
+                except Exception:
+                    log_exc(f"{j['label']}: 내용 꺼내기 실패")
+                    path = None
+                if path:
+                    got[j["key"]] = path
+            log(f"{host}: {len(items)}개 중 {sum(1 for j in items if j['key'] in got)}개 받음 ({time.time() - t:.1f}초)")
+        return got
+
     def _fetch_in_page(self, url: str, dest: Path, label: str) -> Path | None:
         """로그인된 Edge 페이지 안에서 fetch로 파일 내용을 직접 가져옴.
         브라우저 다운로드를 쓰지 않으므로 '이 파일을 열까요?' 창이 뜨지 않습니다."""
@@ -1904,14 +2077,15 @@ class EdgeDownloader:
         log(f"{label}: fetch 성공 {len(data):,} bytes, {name}")
         return store_download(tmp, dest)
 
-    def download(self, url: str, dest: Path, name_ok, label: str, allow_manual=True) -> Path | None:
+    def download(self, url: str, dest: Path, name_ok, label: str, allow_manual=True, skip_fetch=False) -> Path | None:
         if self.driver is None:
             self.start()
         since = time.time() - 2
         # 0) 페이지 안에서 직접 받기 (다운로드 창 없음)
-        got = self._fetch_in_page(url, dest, label)
-        if got:
-            return got
+        if not skip_fetch:
+            got = self._fetch_in_page(url, dest, label)
+            if got:
+                return got
         # 1) 공유 링크 + download=1 → 브라우저 다운로드
         self.report(f"{label}: 파일 받는 중 (바로 받기)...")
         self._get(add_download_param(url))
@@ -1975,58 +2149,40 @@ def run_pipeline(force: bool, manual_fsn: Path | None, report, step, stop_event,
     fco_urls = {k: (cfg.get("fco_urls") or {}).get(k) or v["url"] for k, v in FCO_SOURCES.items()}
     col_overrides = cfg.get("columns") or None
 
-    # ---------- 1. 고객안내문 파일 ----------
+    t_start = time.time()
     fsn_cache = DATA_DIR / FSN_SOURCE["cache"]
+    pm_url = cfg.get("pm_url") or PM_SOURCE["url"]
+    pm_cache = DATA_DIR / PM_SOURCE["cache"]
+
+    # ---------- 받을 파일 목록 (실행할 때마다 모두 새로 받음) ----------
+    jobs = []
     fsn_path, fsn_stale, fsn_origin = None, False, ""
-    need_fsn_download = False
     if manual_fsn:
         step(0, "run", "선택한 파일 복사 중")
         fsn_path = store_download(Path(manual_fsn), fsn_cache) if Path(manual_fsn) != fsn_cache else fsn_cache
         fsn_origin = "직접 선택"
         step(0, "ok", f"직접 선택: {Path(manual_fsn).name}")
-    elif fsn_cache.exists() and is_today(fsn_cache) and not force:
-        fsn_path, fsn_origin = fsn_cache, "오늘 받은 파일"
-        step(0, "ok", "오늘 받은 파일 사용")
-    else:
-        need_fsn_download = True
-
-    # ---------- 2. FCO 파일 ----------
-    fco_plan = []  # (source, path or None, stale, origin, need_download)
+    elif fsn_url:
+        jobs.append({"key": "fsn", "label": "고객안내문", "url": fsn_url, "dest": fsn_cache,
+                     "name_ok": fsn_name_ok, "manual": True})
     for src, spec in FCO_SOURCES.items():
-        mine = DATA_DIR / spec["cache"]
-        theirs = FCO_APP_DIR / spec["cache"]
-        today_files = [p for p in (mine, theirs) if p.exists() and is_today(p)]
-        if today_files and not force:
-            fco_plan.append([src, today_files[0], False,
-                             "오늘 받은 파일" if today_files[0] == mine else "FCO 프로그램이 오늘 받은 파일", False])
-        elif fco_urls.get(src):
-            fco_plan.append([src, None, False, "", True])
-        else:
-            existing = sorted([p for p in (mine, theirs) if p.exists()], key=lambda p: p.stat().st_mtime,
-                              reverse=True)
-            if existing:
-                fco_plan.append([src, existing[0], True, "이전에 받은 파일", False])
-            else:
-                fco_plan.append([src, None, False, "", False])
+        if fco_urls.get(src):
+            jobs.append({"key": "fco:" + src, "label": f"FCO {src}", "url": fco_urls[src],
+                         "dest": DATA_DIR / spec["cache"], "name_ok": fco_name_ok(src), "manual": False})
+    if pm_url:
+        jobs.append({"key": "pm", "label": "담당자 파일(PM Planning)", "url": pm_url, "dest": pm_cache,
+                     "name_ok": lambda n: "pm" in n.lower() and "planning" in n.lower(), "manual": False})
 
-    # ---------- 3. 담당자 파일 (PM Planning) ----------
-    pm_url = cfg.get("pm_url") or PM_SOURCE["url"]
-    pm_cache = DATA_DIR / PM_SOURCE["cache"]
-    pm_path, pm_stale, pm_origin, need_pm = None, False, "", False
-    if pm_cache.exists() and is_today(pm_cache) and not force:
-        pm_path, pm_origin = pm_cache, "오늘 받은 파일"
-    elif pm_url:
-        need_pm = True
-    elif pm_cache.exists():
-        pm_path, pm_stale, pm_origin = pm_cache, True, "이전에 받은 파일"
-
-    downloads_needed = need_fsn_download or any(p[4] for p in fco_plan) or need_pm
-    downloader = None
+    got = {}
     fsn_fail_reason = ""
-    try:
-        if downloads_needed:
-            downloader = EdgeDownloader(report, stop_event)
-            holder["downloader"] = downloader
+    if jobs:
+        if not manual_fsn:
+            step(0, "run", "SharePoint에서 받는 중")
+        step(1, "run", "받는 중")
+        step(2, "run", "받는 중")
+        downloader = EdgeDownloader(report, stop_event)
+        holder["downloader"] = downloader
+        try:
             try:
                 downloader.start()
             except Exception as e:
@@ -2034,66 +2190,64 @@ def run_pipeline(force: bool, manual_fsn: Path | None, report, step, stop_event,
                 fsn_fail_reason = f"Edge 브라우저를 열지 못했습니다 ({type(e).__name__})"
                 report(fsn_fail_reason)
                 downloader = None
-
-        if need_fsn_download:
-            step(0, "run", "SharePoint에서 받는 중")
-            got = None
             if downloader is not None:
                 try:
-                    got = downloader.download(fsn_url, fsn_cache, fsn_name_ok, "고객안내문")
-                    if not got:
-                        fsn_fail_reason = "다운로드된 파일을 찾지 못했습니다 (시간 초과)"
-                except Exception as e:
-                    log_exc("고객안내문 다운로드 실패")
-                    fsn_fail_reason = f"다운로드 중 오류 ({type(e).__name__})"
-            if got:
-                fsn_path, fsn_origin = got, "방금 받은 파일"
-                step(0, "ok", "새로 받음")
-            elif fsn_cache.exists():
-                fsn_path, fsn_stale, fsn_origin = fsn_cache, True, "이전에 받은 파일"
-                d = dt.datetime.fromtimestamp(fsn_cache.stat().st_mtime).strftime("%m/%d %H:%M")
-                step(0, "warn", f"받기 실패 → 이전 파일 사용 ({d})")
-            else:
-                step(0, "fail", "받기 실패")
-
-        step(1, "run", "확인 중")
-        for item in fco_plan:
-            src, path, stale, origin, need = item
-            if need:
-                spec = FCO_SOURCES[src]
-                got = None
-                if downloader is not None:
-                    try:
-                        got = downloader.download(fco_urls[src], DATA_DIR / spec["cache"], fco_name_ok(src),
-                                                  f"FCO {src}", allow_manual=False)
-                    except Exception:
-                        log_exc(f"FCO {src} 다운로드 실패")
-                if got:
-                    item[1], item[3] = got, "방금 받은 파일"
-                else:
-                    existing = sorted([p for p in (DATA_DIR / spec["cache"], FCO_APP_DIR / spec["cache"])
-                                       if p.exists()], key=lambda p: p.stat().st_mtime, reverse=True)
-                    if existing:
-                        item[1], item[2], item[3] = existing[0], True, "받기 실패 → 이전 파일"
-
-        if need_pm:
-            step(2, "run", "SharePoint에서 받는 중")
-            got = None
-            if downloader is not None:
-                try:
-                    got = downloader.download(
-                        pm_url, pm_cache, lambda n: "pm" in n.lower() and "planning" in n.lower(),
-                        "담당자 파일(PM Planning)", allow_manual=False)
+                    got = downloader.fetch_many(jobs)
                 except Exception:
-                    log_exc("담당자 파일 다운로드 실패")
-            if got:
-                pm_path, pm_origin = got, "방금 받은 파일"
-            elif pm_cache.exists():
-                pm_path, pm_stale, pm_origin = pm_cache, True, "받기 실패 → 이전 파일"
-    finally:
-        if downloader is not None:
-            downloader.quit()
-        holder["downloader"] = None
+                    log_exc("동시 받기 실패")
+                # 동시에 못 받은 파일만 예전 방식(브라우저 다운로드 → 메뉴 클릭)으로 하나씩
+                for j in jobs:
+                    if j["key"] in got or stop_event.is_set():
+                        continue
+                    try:
+                        path = downloader.download(j["url"], j["dest"], j["name_ok"], j["label"],
+                                                   allow_manual=j["manual"], skip_fetch=True)
+                        if path:
+                            got[j["key"]] = path
+                        elif j["key"] == "fsn":
+                            fsn_fail_reason = "다운로드된 파일을 찾지 못했습니다 (시간 초과)"
+                    except Exception as e:
+                        log_exc(f"{j['label']} 다운로드 실패")
+                        if j["key"] == "fsn":
+                            fsn_fail_reason = f"다운로드 중 오류 ({type(e).__name__})"
+        finally:
+            if downloader is not None:
+                downloader.quit()
+            holder["downloader"] = None
+    t_download = time.time() - t_start
+    log(f"받기 {t_download:.1f}초: {sorted(got)}")
+
+    # ---------- 1. 고객안내문 결과 ----------
+    if not manual_fsn:
+        if "fsn" in got:
+            fsn_path, fsn_origin = got["fsn"], "방금 받은 파일"
+            step(0, "ok", "새로 받음")
+        elif fsn_cache.exists():
+            fsn_path, fsn_stale, fsn_origin = fsn_cache, True, "이전에 받은 파일"
+            d = dt.datetime.fromtimestamp(fsn_cache.stat().st_mtime).strftime("%m/%d %H:%M")
+            step(0, "warn", f"받기 실패 → 이전 파일 사용 ({d})")
+        else:
+            step(0, "fail", "받기 실패")
+
+    # ---------- 2. FCO 결과 (못 받으면 이전 파일 / FCO 프로그램 파일) ----------
+    fco_plan = []  # [source, path, stale, origin, _]
+    for src, spec in FCO_SOURCES.items():
+        if "fco:" + src in got:
+            fco_plan.append([src, got["fco:" + src], False, "방금 받은 파일", False])
+            continue
+        existing = sorted([p for p in (DATA_DIR / spec["cache"], FCO_APP_DIR / spec["cache"]) if p.exists()],
+                          key=lambda p: p.stat().st_mtime, reverse=True)
+        if existing:
+            fco_plan.append([src, existing[0], True, "받기 실패 → 이전 파일", False])
+        else:
+            fco_plan.append([src, None, False, "", False])
+
+    # ---------- 3. 담당자 파일 결과 ----------
+    pm_path, pm_stale, pm_origin = None, False, ""
+    if "pm" in got:
+        pm_path, pm_origin = got["pm"], "방금 받은 파일"
+    elif pm_cache.exists():
+        pm_path, pm_stale, pm_origin = pm_cache, True, "받기 실패 → 이전 파일"
 
     fco_ok = [p for p in fco_plan if p[1]]
     fco_missing = [p[0] for p in fco_plan if not p[1]]
@@ -2111,6 +2265,8 @@ def run_pipeline(force: bool, manual_fsn: Path | None, report, step, stop_event,
     else:
         step(1, "ok", " · ".join(p[0] for p in fco_ok))
 
+    t_parse0 = time.time()
+    report("엑셀 데이터를 읽는 중...")
     fco_infos = []
     for src, path, stale, origin, _ in fco_plan:
         if path:
@@ -2147,7 +2303,7 @@ def run_pipeline(force: bool, manual_fsn: Path | None, report, step, stop_event,
     fsn_info = None
     if fsn_path:
         meta = read_meta(fsn_path)
-        report("엑셀 데이터를 읽는 중... (파일이 크면 1~2분 걸릴 수 있습니다)")
+        report("고객안내문 데이터를 읽는 중...")
         fsn_info = {"parse": parse_fsn(fsn_path, col_overrides, cfg.get("skip_sheets")),
                     "file": file_info(fsn_path, meta.get("original_name", ""), fsn_stale, fsn_origin)}
     if not (fsn_info and fsn_info["parse"].get("ok")) and not any((i.get("parse") or {}).get("ok")
@@ -2156,7 +2312,7 @@ def run_pipeline(force: bool, manual_fsn: Path | None, report, step, stop_event,
             msg = "고객안내문 파일을 읽지 못했습니다.\n" + fsn_info["parse"]["error"]
         else:
             msg = ("고객안내문 파일을 받지 못했습니다.\n원인: " + (fsn_fail_reason or "알 수 없음") +
-                   "\n\n해결 방법\n1) [새로 받기]를 눌러 다시 시도\n"
+                   "\n\n해결 방법\n1) [다시 받기]를 눌러 다시 시도\n"
                    "2) 브라우저에서 파일을 직접 내려받은 뒤 [파일 직접 선택]으로 선택")
         raise RuntimeError(msg)
 
@@ -2169,9 +2325,12 @@ def run_pipeline(force: bool, manual_fsn: Path | None, report, step, stop_event,
     if fsn_info and not fsn_info["parse"].get("ok"):
         step(3, "warn", f"고객안내문 읽기 실패 · FCO {n_fco}건")
     else:
-        n_pp = sum(1 for r in data["fsn"]["rows"] if r.get("ppsrc"))
-        step(3, "ok", f"고객안내문 {n_fsn}건 (담당자 연결 {n_pp}건) · FCO {n_fco}건")
-    log(f"대시보드 생성: {out}")
+        n_pp = sum(1 for r in data["fsn"]["rows"] if r.get("fse"))
+        step(3, "ok", f"고객안내문 {n_fsn}건 (담당 FSE {n_pp}건) · FCO {n_fco}건")
+    t_parse = time.time() - t_parse0
+    report(f"받기 {t_download:.0f}초 · 정리 {t_parse:.0f}초")
+    log(f"대시보드 생성: {out} (받기 {t_download:.1f}초, 정리 {t_parse:.1f}초)")
+    holder["timing"] = f"받기 {t_download:.0f}초 · 정리 {t_parse:.0f}초"
     return out
 
 
@@ -2290,7 +2449,7 @@ def run_gui():
         root.after(300, root.destroy)
 
     b_open = ttk.Button(btns, text="대시보드 열기", command=on_open)
-    b_refresh = ttk.Button(btns, text="새로 받기", command=lambda: start(force=True))
+    b_refresh = ttk.Button(btns, text="다시 받기", command=lambda: start(force=True))
     b_pick = ttk.Button(btns, text="파일 직접 선택", command=on_pick)
     b_folder = ttk.Button(btns, text="폴더 열기", command=lambda: open_folder(APP_DIR))
     for b in (b_open, b_refresh, b_pick, b_folder):
@@ -2318,7 +2477,7 @@ def run_gui():
                     holder["html"] = msg[1]
                     pb.stop()
                     pb.configure(mode="determinate", value=100)
-                    status_var.set(f"완료 · 대시보드를 브라우저로 열었습니다.\n{msg[1]}")
+                    status_var.set(f"완료 ({holder.get('timing', '')}) · 대시보드를 브라우저로 열었습니다.\n{msg[1]}")
                     set_buttons(False)
                     open_in_browser(msg[1])
                 elif kind == "error":

@@ -27,8 +27,9 @@ HTML 대시보드(`~/FSN_Dashboard/FSN_FCO_Dashboard.html`)를 만들고 Edge로
 
 ## 진행 창 (Tkinter) 흐름
 1. 고객안내문 파일 → 2. FCO 파일 (MR · XR · CT/AMI) → 3. 담당자 파일 (PM Planning) → 4. 대시보드 만들기. 단계별로 ✔ / ! / ✖ 표시.
-- 버튼: 대시보드 열기 / 새로 받기(오늘 받은 파일이 있어도 다시 받기) / 파일 직접 선택(다운로드 실패 시) / 폴더 열기 / 닫기.
-- 오늘 받은 파일이 있으면 받지 않고 재사용합니다. 받기 실패 시 이전 파일로 진행하고 "!"와 파일 날짜를 표시합니다.
+- 버튼: 대시보드 열기 / 다시 받기 / 파일 직접 선택(다운로드 실패 시) / 폴더 열기 / 닫기.
+- **실행할 때마다 5개 파일을 모두 새로 받음**(2026-10-31 사용자 요청, "오늘 받은 파일 재사용" 없앰). 받기 실패 시 이전 파일로 진행하고 "!"와 파일 날짜를 표시합니다.
+- 완료 문구에 "받기 n초 · 정리 n초" 표시(속도 확인용, debug_log에도 기록).
 
 ## 사용자 요구사항 (2026-10-23 최초 요청)
 1. BU별, C&R별, 전달방법(등기/직접전달/이메일)별 FSN 전달 상황 시각화 + 아직 전달이 필요한 병원 리스트
@@ -96,6 +97,8 @@ HTML 대시보드(`~/FSN_Dashboard/FSN_FCO_Dashboard.html`)를 만들고 Edge로
 
 ## 자동 다운로드 (EdgeDownloader) — 회사 PC에서 동작 확인 완료
 - Edge(Windows 계정 SSO) + Selenium. 프로필 `~/FSN_Dashboard/browser_profile`(잠겨 있으면 `browser_profile_2`로 재시도), 다운로드 폴더 `~/FSN_Dashboard/downloads`.
+- **속도(2026-10-31)**: `fetch_many` — 사이트(host)마다 파일 화면을 한 번만 열고(고객안내문 docs.philips.com 1번, FCO 3개+PM share.philips.com 1번),
+  그 사이트의 파일들을 페이지 안에서 **동시에** fetch(`FETCH_MANY_START_JS`) → 하나씩 base64로 꺼냄(`FETCH_MANY_GET_JS`). 못 받은 파일만 아래 ①②③으로 하나씩.
 - 순서:
   ⓪ 파일 화면을 연 뒤 **페이지 안에서 `fetch(다운로드 주소, credentials:'include')`** 로 파일 내용을 직접 받음(`FETCH_JS`, `_fetch_in_page`). 첫 두 바이트가 `PK`인지 확인 후 저장.
      브라우저 다운로드를 쓰지 않아서 Edge의 "이 파일을 열까요? [열기][취소]" 창이 안 뜸(1차 버전에서 사용자가 이 창을 눌러야 받아지던 문제를 이렇게 해결). **2026-10-29 회사 PC에서 확인 완료.**
@@ -104,7 +107,12 @@ HTML 대시보드(`~/FSN_Dashboard/FSN_FCO_Dashboard.html`)를 만들고 Edge로
   ③ 사용자가 직접 받기 3분 대기(고객안내문만)
 - 로그인 페이지(login.microsoftonline 등)면 사용자에게 로그인 안내 후 최대 150초 대기.
 - 브라우저 다운로드 경로(①~③)의 파일 인식: 고객안내문은 "시작 이후 새로 생긴 xlsx", FCO는 이름에 "FCO" + MR/XR/CT.
-- 캐시: `~/FSN_Dashboard/data/FSN_customer_notice.xlsx`, `MR_FCO_Action_Plan.xlsx`, `XR_Open_FCO_list.xlsx`, `CT_AMI_FCO_Action_Plan.xlsx` (+ `.meta.json`에 원래 파일명). 오늘 받은 파일이면 재사용.
+- 저장: `~/FSN_Dashboard/data/FSN_customer_notice.xlsx`, `MR_FCO_Action_Plan.xlsx`, `XR_Open_FCO_list.xlsx`, `CT_AMI_FCO_Action_Plan.xlsx`, `PM_Planning_master.xlsx` (+ `.meta.json`에 원래 파일명). 받기 실패 때만 이전 파일 사용.
+
+## 엑셀 읽기 속도 (2026-10-31)
+- 모든 파일을 openpyxl `read_only=True`로 읽음(`sheet_rows`: `reset_dimensions()` 후 값만). 고객안내문은 병합 셀 정보를 zip 안 시트 XML의 `<mergeCell>`에서 직접 읽음(`SheetMerges`, `fill_merges`).
+- 시트마다 **앞 30행만 먼저 읽어** 헤더를 찾고, 쓸 시트가 아니면 나머지를 읽지 않음(IB_raw data 같은 큰 시트 건너뜀). 담당자 파일은 이름이 대상이 아닌 시트는 앞 30행에 S/N·장비 ID 칸이 있을 때만 끝까지 읽음.
+- 측정(Claude 환경, 10MB·4,500행 + 4만 행 raw 시트 파일): 고객안내문 읽기 17.3초 → 3.4초.
 
 ### 이미 해결한 문제 (되돌리지 말 것)
 - `page_load_strategy="eager"` + 45초 타임아웃, `command_executor.set_timeout(20)` (FCO 때 해결).
