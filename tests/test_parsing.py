@@ -272,6 +272,44 @@ def test_people_matching_robust():
         assert st.get("fco_name") == 1, st
 
 
+def test_ragged_rows():
+    """빠른 읽기 모드에선 행 길이가 제각각 → 'list index out of range' 오류(2026-10-31) 재발 방지"""
+    import openpyxl
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        # FCO: 헤더 다음 행이 짧음
+        wb = openpyxl.Workbook(); ws = wb.active; ws.title = "Action Plan_MR"
+        ws.append(["FCO", "Due Date", "FCO Title", "SN", "Account", "FSE", "Status", "Remark"])
+        ws.append(["FCO1", dt.date(2027, 1, 1), "t", "S1", "가람병원", "김민준"])
+        ws.append(["FCO2"])
+        ws.append(["FCO3", None, None, None, None, None, "Closed", "x", "넘치는 칸"])
+        wb.save(tmp / "fco.xlsx")
+        f = main.parse_fco(tmp / "fco.xlsx", "MR", dt.date(2026, 10, 31))
+        assert f["ok"] and len(f["rows"]) == 2 and f["closed"] == 1, f
+        # 고객안내문: 제목 행 + 짧은 헤더 + 긴 데이터 행
+        wb = openpyxl.Workbook(); ws = wb.active; ws.title = "MR"
+        ws.append(["2026 고객안내문"])
+        ws.append(["C&R#", "일련번호(S/N)", "국문병원명", "최종증빙 확인"])
+        ws.append(["C1", "62030", "가람병원", "O", "비고", "더 긴 행"])
+        ws.append(["C1", "62031", "누리병원"])
+        wb.save(tmp / "fsn.xlsx")
+        r = main.parse_fsn(tmp / "fsn.xlsx")
+        assert r["ok"] and [x["s"] for x in r["rows"]] == [1, 0], r
+        # 담당자 파일: 짧은 행/긴 행 섞임
+        wb = openpyxl.Workbook(); ws = wb.active; ws.title = "FSE"
+        ws.append(["FSE", "담당 병원"])
+        ws.append(["김민준", "가람병원", "x", "y"])
+        ws.append(["이서연"])
+        ws.append(["박지훈", "누리병원"])
+        wb.save(tmp / "pm.xlsx")
+        pp = main.parse_people(tmp / "pm.xlsx")
+        assert pp["ok"], pp
+        # 파일이 깨져 있어도 전체가 멈추지 않음
+        (tmp / "broken.xlsx").write_bytes(b"not an excel file")
+        bad = main.safe_parse("테스트", main.parse_fco, tmp / "broken.xlsx", "MR", dt.date(2026, 10, 31))
+        assert bad["ok"] is False and bad["error"]
+
+
 def test_download_urls():
     fco = main.FCO_SOURCES["MR"]["url"]
     assert main.add_download_param(fco) == (

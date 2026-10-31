@@ -113,6 +113,9 @@ HTML 대시보드(`~/FSN_Dashboard/FSN_FCO_Dashboard.html`)를 만들고 Edge로
 - 모든 파일을 openpyxl `read_only=True`로 읽음(`sheet_rows`: `reset_dimensions()` 후 값만). 고객안내문은 병합 셀 정보를 zip 안 시트 XML의 `<mergeCell>`에서 직접 읽음(`SheetMerges`, `fill_merges`).
 - 시트마다 **앞 30행만 먼저 읽어** 헤더를 찾고, 쓸 시트가 아니면 나머지를 읽지 않음(IB_raw data 같은 큰 시트 건너뜀). 담당자 파일은 이름이 대상이 아닌 시트는 앞 30행에 S/N·장비 ID 칸이 있을 때만 끝까지 읽음.
 - 측정(Claude 환경, 10MB·4,500행 + 4만 행 raw 시트 파일): 고객안내문 읽기 17.3초 → 3.4초.
+- **주의: read_only 모드에선 행마다 길이가 다름**(마지막으로 채워진 칸까지만). 칸을 읽을 땐 항상 `c < len(row)` 확인.
+  2026-10-31 회사 PC에서 `detect_header`의 두 줄 헤더 조합이 다음 행을 같은 길이로 가정해 "list index out of range" → 수정 + `test_ragged_rows`.
+- 파일별 읽기는 `safe_parse`로 감쌈: 한 파일에서 오류가 나도 나머지로 대시보드를 만들고 오류는 로그·[데이터 정보]에 남김.
 
 ### 이미 해결한 문제 (되돌리지 말 것)
 - `page_load_strategy="eager"` + 45초 타임아웃, `command_executor.set_timeout(20)` (FCO 때 해결).

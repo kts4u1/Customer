@@ -476,9 +476,11 @@ def detect_header(grid, spec, required, overrides=None, scan_rows=25):
         # 제목 행(값이 하나뿐인 행)은 두 줄 헤더 조합에서 제외
         if r + 1 < len(grid) and len(distinct) > 1:
             comb = []
-            for c in range(len(grid[r])):
-                top = clean_text(grid[r][c])
-                bottom = clean_text(grid[r + 1][c])
+            nxt = grid[r + 1]
+            # 빠른 읽기 모드에선 행마다 길이가 다를 수 있음 (마지막으로 채워진 칸까지만 옴)
+            for c in range(max(len(grid[r]), len(nxt))):
+                top = clean_text(grid[r][c]) if c < len(grid[r]) else ""
+                bottom = clean_text(nxt[c]) if c < len(nxt) else ""
                 comb.append((c, bottom or top))
             candidates.append((r + 1, comb))
         for last_row, cells in candidates:
@@ -2140,6 +2142,16 @@ def fsn_name_ok(name: str) -> bool:
     return True
 
 
+def safe_parse(label, fn, *args):
+    """파일 하나를 읽다 오류가 나도 프로그램 전체가 멈추지 않게: 오류는 로그와 [데이터 정보] 탭에 남김"""
+    try:
+        return fn(*args)
+    except Exception as e:
+        log_exc(f"{label} 읽기 실패")
+        return {"ok": False, "error": f"{label} 파일을 읽는 중 오류: {type(e).__name__}: {e}", "rows": [],
+                "sheets": [], "people": [], "maps": {"sn": {}, "equip": {}, "code": {}, "name": {}}, "names": []}
+
+
 def run_pipeline(force: bool, manual_fsn: Path | None, report, step, stop_event, holder: dict) -> Path:
     """report(text), step(idx, state, text). 대시보드 HTML 경로 반환."""
     ensure_dirs()
@@ -2271,7 +2283,7 @@ def run_pipeline(force: bool, manual_fsn: Path | None, report, step, stop_event,
     for src, path, stale, origin, _ in fco_plan:
         if path:
             meta = read_meta(path)
-            fco_infos.append({"source": src, "parse": parse_fco(path, src, today),
+            fco_infos.append({"source": src, "parse": safe_parse(f"FCO {src}", parse_fco, path, src, today),
                               "file": file_info(path, meta.get("original_name", ""), stale, origin)})
         else:
             fco_infos.append({"source": src, "parse": None, "file": {},
@@ -2283,7 +2295,7 @@ def run_pipeline(force: bool, manual_fsn: Path | None, report, step, stop_event,
     if pm_path:
         report("담당자 파일을 읽는 중...")
         meta = read_meta(pm_path)
-        pp_parse = parse_people(pm_path, fco_names)
+        pp_parse = safe_parse("담당자 파일", parse_people, pm_path, fco_names)
         people_info = {"parse": pp_parse, "file": file_info(pm_path, meta.get("original_name", ""), pm_stale, pm_origin)}
         d = dt.datetime.fromtimestamp(pm_path.stat().st_mtime).strftime("%m/%d")
         if not pp_parse.get("ok"):
@@ -2304,7 +2316,7 @@ def run_pipeline(force: bool, manual_fsn: Path | None, report, step, stop_event,
     if fsn_path:
         meta = read_meta(fsn_path)
         report("고객안내문 데이터를 읽는 중...")
-        fsn_info = {"parse": parse_fsn(fsn_path, col_overrides, cfg.get("skip_sheets")),
+        fsn_info = {"parse": safe_parse("고객안내문", parse_fsn, fsn_path, col_overrides, cfg.get("skip_sheets")),
                     "file": file_info(fsn_path, meta.get("original_name", ""), fsn_stale, fsn_origin)}
     if not (fsn_info and fsn_info["parse"].get("ok")) and not any((i.get("parse") or {}).get("ok")
                                                                   for i in fco_infos):
