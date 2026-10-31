@@ -901,6 +901,61 @@ def loose_key(name) -> str:
     return k if len(k) >= 2 else ""
 
 
+SHORT_ID = 6   # 이보다 짧은 S/N·ID는 다른 병원 장비와 번호가 겹칠 수 있음 → 병원도 같아야 인정
+
+
+def _common_run(a: str, b: str) -> int:
+    """두 문자열이 연속으로 같은 글자 수(가장 긴 것)"""
+    best = 0
+    prev = [0] * (len(b) + 1)
+    for i in range(1, len(a) + 1):
+        cur = [0] * (len(b) + 1)
+        for j in range(1, len(b) + 1):
+            if a[i - 1] == b[j - 1]:
+                cur[j] = prev[j - 1] + 1
+                if cur[j] > best:
+                    best = cur[j]
+        prev = cur
+    return best
+
+
+def same_hospital(row_names, cand_names) -> bool:
+    """두 쪽 병원 이름이 같은 병원인지.
+    정확히 같음 / 비슷한 이름 / 한쪽이 다른 쪽을 포함('강릉동인 Ach 1.5T' ↔ '강릉동인병원') /
+    한글만 비교해서 3글자 이상 연속으로 같고 짧은 쪽의 60% 이상('인천성모 Ing CX' ↔ '가톨릭대학교 인천성모병원')"""
+    rows = [(hospital_key(n), loose_key(n)) for n in row_names if clean_text(n)]
+    for c in cand_names:
+        ck, cl = hospital_key(c), loose_key(c)
+        for k, l in rows:
+            if ck and ck == k:
+                return True
+            if l and cl and (l == cl or (len(l) >= 2 and len(cl) >= 2 and (l in cl or cl in l))):
+                return True
+            hl, hc = re.sub(r"[^가-힣]", "", l or ""), re.sub(r"[^가-힣]", "", cl or "")
+            if len(hl) >= 3 and len(hc) >= 3:
+                run = _common_run(hl, hc)
+                if run >= 3 and run >= 0.6 * min(len(hl), len(hc)):
+                    return True
+    return False
+
+
+def confirm_by_hospital(cands, key, row_names, row_mod, get_mods, get_sig):
+    """같은 번호(S/N 등)를 가진 기록들 중 이 행의 장비로 볼 수 있는 것만 남김.
+    - 번호가 길고(6자 이상) 기록 내용이 하나로 같으면 그대로 인정
+    - 아니면 병원 이름이 같은 기록만 인정
+    - 병원 정보가 없는 기록이 하나뿐이고 장비 종류까지 같으면 인정"""
+    if not cands:
+        return []
+    if len(key) >= SHORT_ID and len({get_sig(c) for c in cands}) == 1:
+        return cands
+    with_h = [c for c in cands if c["hosp"] and same_hospital(row_names, c["hosp"])]
+    if with_h:
+        return with_h
+    if len(cands) == 1 and not cands[0]["hosp"] and row_mod and row_mod in get_mods(cands[0]):
+        return cands
+    return []
+
+
 def split_hospitals(v) -> list:
     """한 칸에 병원이 여러 개 적힌 경우(줄바꿈, 쉼표 등) 나눔"""
     out = []
@@ -1009,7 +1064,8 @@ def parse_people(path: Path, extra_roster=None) -> dict:
     import openpyxl
     res = {"ok": False, "error": "", "sheets": [], "maps": {"sn": {}, "equip": {}, "code": {}, "name": {}},
            "aliases": 0, "names": [],
-           "equipment": {"sn": {}, "equip": {}, "sheets": [], "conflicts": 0}}
+           "equipment": {"sn": {}, "equip": {}, "sheets": [], "conflicts": 0},
+           "recs": {"sn": {}, "equip": {}, "code": {}}}
     try:
         wb = openpyxl.load_workbook(path, data_only=True, read_only=True)
     except Exception as e:
@@ -1110,14 +1166,16 @@ def parse_people(path: Path, extra_roster=None) -> dict:
             for row in data:
                 sv = row[keys["sn"]] if "sn" in keys and keys["sn"] < len(row) else None
                 ev = row[keys["equip"]] if "equip" in keys and keys["equip"] < len(row) else None
+                hv = [v for f in ("hospital", "hospital2", "hospital_en") if f in keys and keys[f] < len(row)
+                      for v in split_hospitals(row[keys[f]])]
                 hit = False
                 for kind, key in (("sn", sn_norm(sv) if sv is not None else ""), ("equip", id_key(ev))):
                     if not key:
                         continue
-                    if key in eq[kind] and eq[kind][key] != mod:
+                    lst = eq[kind].setdefault(key, [])
+                    if any(x["mod"] != mod for x in lst):
                         eq["conflicts"] += 1
-                        continue
-                    eq[kind][key] = mod
+                    lst.append({"mod": mod, "hosp": hv})
                     hit = True
                 n_eq += hit
             eq["sheets"].append({"name": title, "mod": mod, "count": n_eq})
@@ -1246,7 +1304,12 @@ def parse_people(path: Path, extra_roster=None) -> dict:
             if not targets:
                 continue
             n += 1
+            hosp_vals = [v for f in ("hospital", "hospital2", "hospital_en") for v in split_hospitals(g(row, f))]
+            rec = {"hosp": hosp_vals, "entries": entries, "sheet": info["name"]}
             for kind, key in targets:
+                if kind in ("sn", "equip", "code"):
+                    res["recs"][kind].setdefault(key, []).append(rec)
+                    continue
                 lst = res["maps"][kind].setdefault(key, [])
                 for e in entries:
                     if e not in lst:
@@ -1275,20 +1338,39 @@ def apply_people(fsn_rows, fco_rows, hospitals_unused, people: dict) -> dict:
     stats = Counter()
     unmatched = Counter()
     maps = people["maps"]
+    recs = people.get("recs") or {}
+    KIND_KO = {"sn": "S/N", "equip": "장비 ID", "code": "고객코드"}
     for r in fsn_rows:
         found = None
-        for kind, key in (("sn", sn_norm(r.get("sn", ""))), ("equip", id_key(r.get("eq", ""))),
-                          ("code", id_key(r.get("code", ""))), ("name", hospital_key(r["h"])),
-                          ("name", hospital_key(r.get("hen", ""))), ("loose", loose_key(r["h"])),
-                          ("loose", loose_key(r.get("hen", "")))):
-            if key and key in maps.get(kind, {}):
-                found = (kind, maps[kind][key])
+        row_names = [r["h"], r.get("hen", "")]
+        row_mod = r.get("mod") if r.get("mod") in ("MR", "CT", "XR") else None
+        for kind, key, raw in (("sn", sn_norm(r.get("sn", "")), r.get("sn", "")), ("equip", id_key(r.get("eq", "")), r.get("eq", "")),
+                               ("code", id_key(r.get("code", "")), r.get("code", ""))):
+            if not key or key not in recs.get(kind, {}):
+                continue
+            cands = recs[kind][key]
+            if row_mod:  # 장비 종류가 다른 기록은 제외 (MR 장비에 XR 담당이 붙지 않게)
+                cands = [c for c in cands if not ({m for e in c["entries"] for m in e[1].split("/") if m})
+                         or row_mod in {m for e in c["entries"] for m in e[1].split("/") if m}]
+            # 번호가 짧거나 같은 번호에 서로 다른 담당자가 있으면 → 병원까지 같아야 인정
+            cands = confirm_by_hospital(cands, key, row_names, row_mod,
+                                        lambda c: {m for e in c["entries"] for m in e[1].split("/") if m},
+                                        lambda c: frozenset(e[2] for e in c["entries"]))
+            if cands:
+                entries = [e for c in cands for e in c["entries"]]
+                found = (kind, entries, f"담당자 파일 '{cands[0]['sheet']}' · {KIND_KO[kind]} {raw}")
                 break
+        if not found:
+            for kind, key in (("name", hospital_key(r["h"])), ("name", hospital_key(r.get("hen", ""))),
+                              ("loose", loose_key(r["h"])), ("loose", loose_key(r.get("hen", "")))):
+                if key and key in maps.get(kind, {}):
+                    found = (kind, maps[kind][key], "담당자 파일 · 병원명")
+                    break
         if not found:
             stats["none"] += 1
             unmatched[r["h"]] += 1
             continue
-        kind, entries = found
+        kind, entries, why = found
         row_mods = row_mod_set(r)
         # 모달리티가 맞는 담당자 + 모달리티 표시가 없는 담당자(예: 영업)
         untagged = [e for e in entries if not e[1]]
@@ -1305,9 +1387,11 @@ def apply_people(fsn_rows, fco_rows, hospitals_unused, people: dict) -> dict:
         if fse and not r.get("fse"):
             r["fse"] = ", ".join(fse)
             r["ppsrc"] = "pm"
+            r["ppwhy"] = why
         if sales and not r.get("sales"):
             r["sales"] = ", ".join(sales)
             r["ppsrc"] = "pm"
+            r["ppwhy"] = r.get("ppwhy") or why
     return {"stats": dict(stats), "unmatched": [{"name": n, "count": c} for n, c in unmatched.most_common(30)]}
 
 
@@ -1330,19 +1414,35 @@ def assign_modality(fsn_rows, equipment: dict, fco_people: list) -> dict:
     eq_sn = (equipment or {}).get("sn", {})
     eq_id = (equipment or {}).get("equip", {})
     fco_sn = {}
-    for sn, _acc, src, _fse in fco_people:
+    for sn, acc, src, _fse in fco_people:
         if sn_norm(sn) and src in FCO_SRC_MOD:
-            fco_sn.setdefault(sn_norm(sn), FCO_SRC_MOD[src])
+            fco_sn.setdefault(sn_norm(sn), []).append({"mod": FCO_SRC_MOD[src], "hosp": [acc] if acc else []})
+
+    def pick(lst, key, row_names):
+        """같은 번호 기록들 중 종류 하나로 정해지면 그 종류. 번호가 짧거나 종류가 갈리면 병원이 같은 기록만."""
+        if not key or not lst:
+            return None
+        if len(key) >= SHORT_ID and len({x["mod"] for x in lst}) == 1:
+            return lst[0]["mod"]
+        mods = {x["mod"] for x in lst if x["hosp"] and same_hospital(row_names, x["hosp"])}
+        if not mods and len(lst) == 1 and not lst[0]["hosp"] and len(key) >= 4:
+            return lst[0]["mod"]   # 병원 칸이 없는 장비 탭: 그 번호가 하나뿐이면 인정
+        return mods.pop() if len(mods) == 1 else None
+
     how = Counter()
     for r in fsn_rows:
         sn, eq = sn_norm(r.get("sn", "")), id_key(r.get("eq", ""))
+        names = [r["h"], r.get("hen", "")]
         sheet = mod_tags(r.get("sheet", "")) or mod_tags(r.get("bu", ""))
-        if sn and sn in eq_sn:
-            mod, src = eq_sn[sn], "pm_sn"
-        elif eq and eq in eq_id:
-            mod, src = eq_id[eq], "pm_equip"
-        elif sn and sn in fco_sn:
-            mod, src = fco_sn[sn], "fco_sn"
+        m_pm_sn = pick(eq_sn.get(sn), sn, names)
+        m_pm_eq = pick(eq_id.get(eq), eq, names) if not m_pm_sn else None
+        m_fco = pick(fco_sn.get(sn), sn, names) if not (m_pm_sn or m_pm_eq) else None
+        if m_pm_sn:
+            mod, src = m_pm_sn, "pm_sn"
+        elif m_pm_eq:
+            mod, src = m_pm_eq, "pm_equip"
+        elif m_fco:
+            mod, src = m_fco, "fco_sn"
         elif len(sheet) == 1 and next(iter(sheet)) in ("MR", "CT", "XR"):
             mod, src = next(iter(sheet)), "sheet"
         elif system_mod(r.get("sys", "")):
@@ -1366,8 +1466,7 @@ def apply_fco_people(fsn_rows, fco_people: list) -> dict:
             continue
         mod = FCO_SRC_MOD.get(src, "")
         if sn_norm(sn):
-            by_sn.setdefault(sn_norm(sn), [])
-            by_sn[sn_norm(sn)] += [n for n in names if n not in by_sn[sn_norm(sn)]]
+            by_sn.setdefault(sn_norm(sn), []).append({"mod": mod, "hosp": [account] if account else [], "names": names})
         for key in {hospital_key(account), "L:" + loose_key(account) if loose_key(account) else ""}:
             if key:
                 lst = by_hosp.setdefault(key, [])
@@ -1378,9 +1477,18 @@ def apply_fco_people(fsn_rows, fco_people: list) -> dict:
     for r in fsn_rows:
         if r.get("fse"):
             continue
-        names = by_sn.get(sn_norm(r.get("sn", ""))) if sn_norm(r.get("sn", "")) else None
+        key = sn_norm(r.get("sn", ""))
+        cands = list(by_sn.get(key, [])) if key else []
+        row_mod = r.get("mod") if r.get("mod") in ("MR", "CT", "XR") else None
+        if row_mod:
+            cands = [c for c in cands if not c["mod"] or c["mod"] == row_mod]
+        cands = confirm_by_hospital(cands, key, [r["h"], r.get("hen", "")], row_mod,
+                                    lambda c: {c["mod"]} if c["mod"] else set(), lambda c: tuple(c["names"]))
+        names = list(dict.fromkeys(n for c in cands for n in c["names"]))
         kind = "fco_sn"
+        why = f"FCO 파일 · S/N {r.get('sn', '')}"
         if not names:
+            why = "FCO 파일 · 병원명"
             kind = "fco_name"
             row_mods = row_mod_set(r)
             entries = []
@@ -1393,6 +1501,7 @@ def apply_fco_people(fsn_rows, fco_people: list) -> dict:
         if names:
             r["fse"] = ", ".join(names)
             r["ppsrc"] = "fco"
+            r["ppwhy"] = why
             stats[kind] += 1
     return dict(stats)
 
@@ -1505,14 +1614,18 @@ def build_dashboard_data(fsn_info: dict, fco_infos: list, today: dt.date, people
     for r in fco_rows:
         r["k"] = hospital_key(r["h"]) or ("fco:" + r["fco"])
         if r["sn"]:
-            sn_to_key.setdefault(sn_key(r["sn"]), r["k"])
+            sn_to_key.setdefault(sn_key(r["sn"]), []).append((r["k"], r["h"]))
     linked_by_sn = 0
     fco_keys = {r["k"] for r in fco_rows}
     for r in fsn_rows:
         k = ""
         if r["sn"] and sn_key(r["sn"]) in sn_to_key:
-            k = sn_to_key[sn_key(r["sn"])]
-            if k != hospital_key(r["h"]):
+            cands = sn_to_key[sn_key(r["sn"])]
+            if not (len(sn_key(r["sn"])) >= SHORT_ID and len({c[0] for c in cands}) == 1):
+                cands = [c for c in cands if same_hospital([r["h"], r.get("hen", "")], [c[1]])]
+            keys_ = {c[0] for c in cands}
+            k = keys_.pop() if len(keys_) == 1 else ""
+            if k and k != hospital_key(r["h"]):
                 linked_by_sn += 1
         if not k and hospital_key(r["h"]) not in fco_keys and r.get("hen") and hospital_key(r["hen"]) in fco_keys:
             k = hospital_key(r["hen"])  # FCO Account가 영문 이름인 경우

@@ -110,6 +110,15 @@ HTML 대시보드(`~/FSN_Dashboard/FSN_FCO_Dashboard.html`)를 만들고 Edge로
   (장비별 건수, 어떻게 정했는지, PM 장비 탭 목록·대수). FCO 탭의 "소스" 선택칸은 "장비" 필터와 겹쳐 없앰.
 - 다음 확인: 사용자 실행 후 [데이터 정보] "장비 구분"에서 PM 장비 탭이 인식됐는지(탭 이름/대수), "못 정함 → 기타"가 얼마나 되는지.
 
+### S/N이 겹쳐 엉뚱한 담당자가 붙던 문제 (2026-10-31)
+- 증상: 강릉동인병원에 관계없는 FSE(장재훈)가 붙음. 원인: IGT/XR S/N이 "115", "370"처럼 짧아 다른 병원 장비와 번호가 겹치는데,
+  S/N만으로 연결하고 같은 번호의 담당자를 모두 합쳐 넣었음.
+- 수정: S/N·장비 ID·고객코드 연결은 행 단위 기록(`res["recs"]`: 병원명·시트·담당자)으로 저장하고 `confirm_by_hospital`로 확인:
+  번호 6자 이상(`SHORT_ID`) + 기록 내용이 하나면 인정 / 아니면 병원 이름이 같은 기록만(`same_hospital`) / 병원 칸 없는 기록이 하나뿐이고 장비 종류가 같으면 인정.
+  장비 종류가 다른 기록은 먼저 제외. 장비 종류 판정(`assign_modality`), FCO S/N 보충, FCO S/N으로 병원 묶기에도 같은 기준.
+- `same_hospital`: 정확/비슷한 이름/포함 + 한글만 비교해 3글자 이상 연속 일치 & 짧은 쪽 60% 이상(PM 장비 탭 병원 칸은 "인천성모 Ing CX 3.0T" 같은 별칭).
+- 화면: 표에 "담당자 근거" 칸(`r["ppwhy"]`, 예: "담당자 파일 'XR System' · S/N 370", "FCO 파일 · S/N …", "담당자 파일 · 병원명").
+
 ## 자동 다운로드 (EdgeDownloader) — 회사 PC에서 동작 확인 완료
 - Edge(Windows 계정 SSO) + Selenium. 프로필 `~/FSN_Dashboard/browser_profile`(잠겨 있으면 `browser_profile_2`로 재시도), 다운로드 폴더 `~/FSN_Dashboard/downloads`.
 - **속도(2026-10-31)**: `fetch_many` — 사이트(host)마다 파일 화면을 한 번만 열고(고객안내문 docs.philips.com 1번, FCO 3개+PM share.philips.com 1번),

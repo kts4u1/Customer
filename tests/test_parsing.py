@@ -242,10 +242,10 @@ def test_people_matching_robust():
         p = wb.create_sheet("CT PM Plan")                               # 이름은 대상 아니지만 S/N 있는 장비 시트
         p.append([None, None, "FSE", None, "Customer info", None, "기타"])
         p.append(["S/N", "병원", "정", "부", "Name", "연락처", "확인자"])
-        p.append(["C100", "아무병원", "신동민", "서태훈", "홍고객", "010", "가길동"])
-        p.append(["C101", "아무병원", "조찬민", "성경주", "김고객", "010", "나길동"])
-        p.append(["C102", "아무병원", "설재민", "", "이고객", "010", "다길동"])
-        p.append(["C103", "아무병원", "임형묵", "", "박고객", "010", "라길동"])
+        p.append(["CT100100", "아무병원", "신동민", "서태훈", "홍고객", "010", "가길동"])
+        p.append(["CT100101", "아무병원", "조찬민", "성경주", "김고객", "010", "나길동"])
+        p.append(["CT100102", "아무병원", "설재민", "", "이고객", "010", "다길동"])
+        p.append(["CT100103", "아무병원", "임형묵", "", "박고객", "010", "라길동"])
         wb.save(path)
         pp = main.parse_people(path)
         assert pp["ok"], pp
@@ -257,7 +257,7 @@ def test_people_matching_robust():
         assert pp["roster"] == 9 and len(pp["names"]) <= 9, (pp["roster"], pp["names"])
         def row(h, bu="CT", sn=""):
             return {"h": h, "hen": "", "bu": bu, "sn": sn, "eq": "", "code": "", "fse": "", "sales": ""}
-        rows = [row("서울대병원"), row("누리병원"), row("삼성서울병원"), row("도담병원"), row("모름", sn="00C100"),
+        rows = [row("서울대병원"), row("누리병원"), row("삼성서울병원"), row("도담병원"), row("모름", sn="00CT100100"),
                 row("하람병원", bu="MR"), row("하람병원", bu="CT")]
         res = main.apply_people(rows, [], None, pp)
         assert rows[0]["fse"] == "김광수", rows[0]                # 서울대학교병원 ~ 서울대병원
@@ -321,9 +321,9 @@ def test_modality_from_pm_system_tabs():
         f.append(["FSE"])
         for nm in ("김민준", "이서연", "박지훈"):
             f.append([nm])
-        for title, rows in (("MR System", [("M1", "김민준"), ("M2", "김민준")]),
-                            ("CT_System", [("C1", "이서연"), ("X9", "이서연")]),
-                            ("XR system", [("X1", "박지훈"), ("X2", "박지훈")])):
+        for title, rows in (("MR System", [("MRS10001", "김민준"), ("MRS10002", "김민준")]),
+                            ("CT_System", [("CTS20001", "이서연"), ("XRS90009", "이서연")]),
+                            ("XR system", [("XRS30001", "박지훈"), ("XRS30002", "박지훈")])):
             w = wb.create_sheet(title)
             w.append(["S/N", "System", "FSE"])
             for sn, fse in rows:
@@ -332,16 +332,17 @@ def test_modality_from_pm_system_tabs():
         pp = main.parse_people(path)
         eq = pp["equipment"]
         assert {x["mod"] for x in eq["sheets"]} == {"MR", "CT", "XR"}, eq["sheets"]
-        assert eq["sn"]["M1"] == "MR" and eq["sn"]["X1"] == "XR" and eq["sn"]["X9"] == "CT"
+        assert eq["sn"]["MRS10001"][0]["mod"] == "MR" and eq["sn"]["XRS30001"][0]["mod"] == "XR"
+        assert eq["sn"]["XRS90009"][0]["mod"] == "CT"
 
         def row(sn, bu, sys=""):
             return {"h": "가람병원", "hen": "", "bu": bu, "sn": sn, "eq": "", "code": "", "sys": sys, "fse": "", "sales": ""}
-        rows = [row("X1", "IGT DXR US HPM"),          # PM XR 탭 → XR
-                row("X9", "MR"),                      # 시트는 MR이지만 PM 장비 탭(CT)이 우선
+        rows = [row("XRS30001", "IGT DXR US HPM"),          # PM XR 탭 → XR
+                row("XRS90009", "MR"),                      # 시트는 MR이지만 PM 장비 탭(CT)이 우선
                 row("", "MR"),                        # S/N 없음 → 시트 이름 MR
                 row("", "IGT DXR US HPM", "Azurion 7 M20"),   # 섞인 시트 → 장비명으로 XR
                 row("", "IGT DXR US HPM", "EPIQ Elite"),      # 초음파 → 기타
-                row("Z0", "IGT DXR US HPM", "")]              # 못 정함 → 기타
+                row("ZZZ99999", "IGT DXR US HPM", "")]              # 못 정함 → 기타
         res = main.assign_modality(rows, eq, [])
         assert [r["mod"] for r in rows] == ["XR", "CT", "MR", "XR", "기타", "기타"], [r["mod"] for r in rows]
         assert res["counts"]["XR"] == 2 and res["how"]["pm_sn"] == 2
@@ -385,6 +386,63 @@ def test_igt_sheet_korean_names():
         assert [x["h"] for x in mr] == ["동국대학교병원"], mr     # 병원명 없는 행은 건너뜀
         res = main.assign_modality(r["rows"], {}, [])
         assert [x["mod"] for x in igt] == ["XR", "XR", "XR"] and mr[0]["mod"] == "MR", [x["mod"] for x in r["rows"]]
+
+
+def test_same_hospital():
+    yes = [("가톨릭대학교 인천성모병원", "인천성모 Ing CX 3.0T"), ("분당서울대학교병원", "분당서울대 31번 Ing Elition X 3.0T"),
+           ("군포샘병원", "군포샘 Ach3.0T TX(효산의료재단)"), ("중앙대학교광명병원", "중앙대광명 소하검진 Ing Elition X 3.0T"),
+           ("강릉동인병원", "강릉동인 Azurion 7"), ("(재)가람 의료원", "가람의료원")]
+    no = [("강릉동인병원", "강릉아산병원 Azurion"), ("강릉동인병원", "다른병원 Allura"), ("서울대학교병원", "서울성모 Ing")]
+    for a_, b_ in yes:
+        assert main.same_hospital([a_], [b_]), (a_, b_)
+    for a_, b_ in no:
+        assert not main.same_hospital([a_], [b_]), (a_, b_)
+
+
+def test_short_serial_collision():
+    """짧은 S/N이 다른 병원 장비와 겹쳐 엉뚱한 FSE가 붙던 문제(2026-10-31 강릉동인병원에 장재훈) 재발 방지"""
+    import openpyxl
+    with tempfile.TemporaryDirectory() as d:
+        path = Path(d) / "pm.xlsx"
+        wb = openpyxl.Workbook()
+        f = wb.active
+        f.title = "FSE"
+        f.append(["FSE"])
+        for nm in ("이상우", "장재훈", "김민준"):
+            f.append([nm])
+        x = wb.create_sheet("XR System")
+        x.append(["S/N", "Site", "System", "FSE"])
+        x.append(["370", "강릉동인 Azurion 7", "Azurion 7 M12", "이상우"])
+        x.append(["370", "다른병원 Allura", "Allura Xper FD20", "장재훈"])   # 같은 번호, 다른 병원
+        x.append(["371", "다른병원 Allura", "Allura Xper FD20", "장재훈"])
+        m = wb.create_sheet("MR System")
+        m.append(["S/N", "Site", "System", "FSE"])
+        m.append(["370", "강릉동인 Ingenia", "Ingenia 1.5T", "김민준"])         # 같은 번호, 다른 종류(MR)
+        m.append(["MR778899", "아무병원", "Ingenia 3.0T", "김민준"])
+        wb.save(path)
+        pp = main.parse_people(path)
+        assert pp["ok"], pp
+
+        def row(h, sn, sheet, sys=""):
+            return {"h": h, "hen": "", "bu": "", "sheet": sheet, "sn": sn, "eq": "", "code": "", "sys": sys,
+                    "fse": "", "sales": ""}
+        rows = [row("강릉동인병원", "370", "IGT DXR US HPM", "Azurion 7 M12"),   # XR · 강릉동인 → 이상우만
+                row("새병원", "371", "IGT DXR US HPM", "Allura Xper FD20"),      # 번호는 같지만 병원이 다름 → 연결 안 함
+                row("강릉동인병원", "370", "MR", "Ingenia 1.5T"),                 # MR · 강릉동인 → 김민준
+                row("이름다른병원", "MR778899", "MR")]                            # 긴 S/N은 병원명이 달라도 인정
+        main.assign_modality(rows, pp["equipment"], [])
+        assert [r["mod"] for r in rows] == ["XR", "XR", "MR", "MR"], [r["mod"] for r in rows]
+        main.apply_people(rows, [], None, pp)
+        assert rows[0]["fse"] == "이상우", rows[0]
+        assert rows[0]["ppwhy"].startswith("담당자 파일 'XR System'"), rows[0]
+        assert rows[1]["fse"] == "", rows[1]
+        assert rows[2]["fse"] == "김민준", rows[2]
+        assert rows[3]["fse"] == "김민준", rows[3]
+        # FCO 보충도 같은 기준: 짧은 S/N + 다른 병원 → 연결 안 함
+        r5 = row("새병원", "371", "IGT DXR US HPM")
+        r5["mod"] = "XR"
+        main.apply_fco_people([r5], [("371", "다른병원", "XR", "장재훈")])
+        assert r5["fse"] == "", r5
 
 
 def test_download_urls():

@@ -857,6 +857,7 @@ function fsnRowColumns(withHosp) {
     { key: 'sn', label: 'S/N', get: r => r.sn, nowrap: true, when: () => FSN_HAS.sn },
     { key: 'fse', label: 'FSE', get: r => r.fse, when: () => FSN_HAS.fse },
     { key: 'sales', label: '영업', get: r => r.sales, when: () => FSN_HAS.sales },
+    { key: 'ppwhy', label: '담당자 근거', get: r => r.ppwhy || (r.fse ? '고객안내문 파일' : ''), clip: true, when: () => FSN.some(x => x.ppwhy) },
     { key: 's', label: '상태', get: r => (r.s ? '완료' : '미전달') + (r.sr ? ' (' + r.sr + ')' : ''), sortVal: r => r.s, cell: fsnStatusCell, nowrap: true },
     { key: 'm', label: '전달방법', get: r => r.m || r.mr, nowrap: true, when: () => SHOW_METHOD },
     { key: 'd', label: '전달일', get: r => r.d, nowrap: true, when: () => FSN_HAS.d },
