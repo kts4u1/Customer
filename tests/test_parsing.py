@@ -310,6 +310,46 @@ def test_ragged_rows():
         assert bad["ok"] is False and bad["error"]
 
 
+def test_modality_from_pm_system_tabs():
+    """PM Planning의 MR/CT/XR system 탭으로 장비 구분 (2026-10-31 사용자 요청)"""
+    import openpyxl
+    with tempfile.TemporaryDirectory() as d:
+        path = Path(d) / "pm.xlsx"
+        wb = openpyxl.Workbook()
+        f = wb.active
+        f.title = "FSE"
+        f.append(["FSE"])
+        for nm in ("김민준", "이서연", "박지훈"):
+            f.append([nm])
+        for title, rows in (("MR System", [("M1", "김민준"), ("M2", "김민준")]),
+                            ("CT_System", [("C1", "이서연"), ("X9", "이서연")]),
+                            ("XR system", [("X1", "박지훈"), ("X2", "박지훈")])):
+            w = wb.create_sheet(title)
+            w.append(["S/N", "System", "FSE"])
+            for sn, fse in rows:
+                w.append([sn, "장비", fse])
+        wb.save(path)
+        pp = main.parse_people(path)
+        eq = pp["equipment"]
+        assert {x["mod"] for x in eq["sheets"]} == {"MR", "CT", "XR"}, eq["sheets"]
+        assert eq["sn"]["M1"] == "MR" and eq["sn"]["X1"] == "XR" and eq["sn"]["X9"] == "CT"
+
+        def row(sn, bu, sys=""):
+            return {"h": "가람병원", "hen": "", "bu": bu, "sn": sn, "eq": "", "code": "", "sys": sys, "fse": "", "sales": ""}
+        rows = [row("X1", "IGT DXR US HPM"),          # PM XR 탭 → XR
+                row("X9", "MR"),                      # 시트는 MR이지만 PM 장비 탭(CT)이 우선
+                row("", "MR"),                        # S/N 없음 → 시트 이름 MR
+                row("", "IGT DXR US HPM", "Azurion 7 M20"),   # 섞인 시트 → 장비명으로 XR
+                row("", "IGT DXR US HPM", "EPIQ Elite"),      # 초음파 → 기타
+                row("Z0", "IGT DXR US HPM", "")]              # 못 정함 → 기타
+        res = main.assign_modality(rows, eq, [])
+        assert [r["mod"] for r in rows] == ["XR", "CT", "MR", "XR", "기타", "기타"], [r["mod"] for r in rows]
+        assert res["counts"]["XR"] == 2 and res["how"]["pm_sn"] == 2
+        # 담당 FSE도 장비 종류에 맞게: X1(XR) → XR 탭 담당
+        main.apply_people(rows, [], None, pp)
+        assert rows[0]["fse"] == "박지훈" and rows[1]["fse"] == "이서연", (rows[0], rows[1])
+
+
 def test_download_urls():
     fco = main.FCO_SOURCES["MR"]["url"]
     assert main.add_download_param(fco) == (

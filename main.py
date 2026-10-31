@@ -839,6 +839,9 @@ PEOPLE_KEYS = [
     ("modality", _rule(exact=["Modality", "모달리티", "BU", "장비군", "제품군", "Product Group", "Modality Group"],
                        contains=["modality", "모달리티"])),
     ("region", _rule(exact=["지역", "Region", "권역", "Area", "지점"], contains=["region", "지역", "권역"])),
+    ("system", _rule(exact=["System", "System Name", "System Code Description", "장비명", "장비", "Model", "모델",
+                            "모델명", "Product"],
+                     contains=["systemname", "장비명", "모델명"])),
 ]
 PERSON_HINT = ["fse", "엔지니어", "engineer", "cse", "담당", "sales", "영업", "kam", "세일즈", "name", "이름", "성명",
                "manager", "service", "서비스"]
@@ -887,6 +890,44 @@ def split_hospitals(v) -> list:
         if part and norm_header(part) not in PLACEHOLDER:
             out.append(part)
     return out
+
+
+MOD_ORDER = ["MR", "CT", "XR", "기타"]
+# 장비명으로 종류 추정 (PM 장비 탭·FCO·시트 이름으로 못 정할 때만)
+SYSTEM_KEYWORDS = [
+    ("MR", ["ingenia", "achieva", "intera", "panorama", "multiva", "prodiva", "elition", "ambition", "blueseal",
+            "mri", "15t", "30t"]),
+    ("CT", ["incisive", "brilliance", "iqon", "ingenuity", "spectralct", "icct", "mx16", "accessct", "bigbore",
+            "vereos", "skylight", "brightview", "gemini", "forte", "ct5000", "ct3500", "ct"]),
+    ("XR", ["azurion", "allura", "digitaldiagnost", "mobilediagnost", "combidiagnost", "proxidiagnost", "essenta",
+            "duradiagnost", "veradius", "pulsera", "endura", "zenition", "omnidiagnost", "easydiagnost",
+            "primarydiagnost", "dxr", "igt", "cathlab"]),
+    ("기타", ["epiq", "affiniti", "lumify", "cx50", "iu22", "clearvue", "sparq", "intellivue", "efficia"]),
+]
+
+
+def system_mod(name) -> str:
+    s = re.sub(r"[\s\-_.]", "", clean_text(name).lower())
+    if not s:
+        return ""
+    for mod, words in SYSTEM_KEYWORDS:
+        for w in words:
+            if w == "ct":
+                if re.search(r"(?<![a-z])ct(?![a-z])", clean_text(name).lower()):
+                    return mod
+            elif w in s:
+                return mod
+    return ""
+
+
+def title_mods(title) -> set:
+    """시트 이름에서 장비 종류: "MR System", "CT_System", "XRsystem" 등"""
+    tags = mod_tags(title)
+    if not tags:
+        m = re.match(r"\s*(MRI|MR|CT|AMI|DXR|IGT|XR)", clean_text(title).upper())
+        if m:
+            tags = {MOD_CANON[m.group(1)]}
+    return tags
 
 
 def mod_tags(text) -> set:
@@ -948,7 +989,8 @@ def parse_people(path: Path, extra_roster=None) -> dict:
     """PM Planning 파일에서 병원/장비 → 담당자 이름 매핑을 만듦."""
     import openpyxl
     res = {"ok": False, "error": "", "sheets": [], "maps": {"sn": {}, "equip": {}, "code": {}, "name": {}},
-           "aliases": 0, "names": []}
+           "aliases": 0, "names": [],
+           "equipment": {"sn": {}, "equip": {}, "sheets": [], "conflicts": 0}}
     try:
         wb = openpyxl.load_workbook(path, data_only=True, read_only=True)
     except Exception as e:
@@ -1039,6 +1081,29 @@ def parse_people(path: Path, extra_roster=None) -> dict:
                 del people[c]
         info["header_row"] = hr + 1
         info["keys"] = {f: cells[c][1] for f, c in keys.items()}
+        # MR / CT / XR 장비(system) 탭: S/N·장비 ID → 장비 종류 목록 (사용자 지정 기준, 2026-10-31)
+        sheet_mods = title_mods(title)
+        is_system = any(w in norm_header(title) for w in ("system", "시스템", "장비"))
+        if is_system and len(sheet_mods) == 1 and ("sn" in keys or "equip" in keys):
+            mod = next(iter(sheet_mods))
+            eq = res["equipment"]
+            n_eq = 0
+            for row in data:
+                sv = row[keys["sn"]] if "sn" in keys and keys["sn"] < len(row) else None
+                ev = row[keys["equip"]] if "equip" in keys and keys["equip"] < len(row) else None
+                hit = False
+                for kind, key in (("sn", sn_norm(sv) if sv is not None else ""), ("equip", id_key(ev))):
+                    if not key:
+                        continue
+                    if key in eq[kind] and eq[kind][key] != mod:
+                        eq["conflicts"] += 1
+                        continue
+                    eq[kind][key] = mod
+                    hit = True
+                n_eq += hit
+            eq["sheets"].append({"name": title, "mod": mod, "count": n_eq})
+            info["equipment"] = f"{mod} 장비 {n_eq}대"
+        info["sheet_mods"] = "/".join(sorted(sheet_mods))
         is_roster = "fse" in norm_header(title) or "담당" in norm_header(title)
         if is_roster:
             ko_col = next((c for c in range(len(cells)) if looks_like_names([row[c] for row in data[:400] if c < len(row)])
@@ -1119,6 +1184,7 @@ def parse_people(path: Path, extra_roster=None) -> dict:
             continue
         info["used"] = True
         parsed.append((info, keys, {c: (v[0], v[1]) for c, v in people.items()}, data))
+        info["_mods"] = title_mods(info["name"])
 
     names_seen = set()
     dropped_names = Counter()
@@ -1139,7 +1205,7 @@ def parse_people(path: Path, extra_roster=None) -> dict:
                     if role == "fse" and roster and not in_roster(nm):
                         dropped_names[nm] += 1
                         continue
-                    mods = hmods or row_mods
+                    mods = hmods or row_mods or info["_mods"]
                     entries.append((role, "/".join(sorted(mods)), nm))
                     names_seen.add(nm)
             if not entries:
@@ -1168,6 +1234,8 @@ def parse_people(path: Path, extra_roster=None) -> dict:
                         lst.append(e)
         info["rows"] = n
     res["dropped_names"] = [{"name": n, "count": c} for n, c in dropped_names.most_common(20)]
+    for i in res["sheets"]:
+        i.pop("_mods", None)
     # 느슨한 이름은 담당자 파일 안에서 한 병원만 가리킬 때만 사용 (다른 병원과 헷갈리지 않게)
     res["maps"]["loose"] = {lk: res["maps"]["name"][next(iter(ks))] for lk, ks in loose.items()
                             if len(ks) == 1 and next(iter(ks)) in res["maps"]["name"]}
@@ -1202,7 +1270,7 @@ def apply_people(fsn_rows, fco_rows, hospitals_unused, people: dict) -> dict:
             unmatched[r["h"]] += 1
             continue
         kind, entries = found
-        row_mods = mod_tags(r.get("bu", ""))
+        row_mods = row_mod_set(r)
         # 모달리티가 맞는 담당자 + 모달리티 표시가 없는 담당자(예: 영업)
         untagged = [e for e in entries if not e[1]]
         if row_mods:
@@ -1225,6 +1293,49 @@ def apply_people(fsn_rows, fco_rows, hospitals_unused, people: dict) -> dict:
 
 
 FCO_SRC_MOD = {"MR": "MR", "XR": "XR", "CT/AMI": "CT"}
+
+
+def row_mod_set(r) -> set:
+    """담당자를 고를 때 쓰는 장비 종류: 정해졌으면 그것, 기타면 시트 이름의 종류(없으면 비교 안 되는 값)"""
+    m = r.get("mod")
+    if m in ("MR", "CT", "XR"):
+        return {m}
+    if m == "기타":
+        return {"기타"}
+    return mod_tags(r.get("bu", ""))
+
+
+def assign_modality(fsn_rows, equipment: dict, fco_people: list) -> dict:
+    """고객안내문 행마다 장비 종류(MR/CT/XR/기타)를 정함.
+    PM 장비 탭 S/N → PM 장비 탭 장비 ID → FCO 파일 S/N → 한 종류 시트(MR/CT) → 장비명 → 기타"""
+    eq_sn = (equipment or {}).get("sn", {})
+    eq_id = (equipment or {}).get("equip", {})
+    fco_sn = {}
+    for sn, _acc, src, _fse in fco_people:
+        if sn_norm(sn) and src in FCO_SRC_MOD:
+            fco_sn.setdefault(sn_norm(sn), FCO_SRC_MOD[src])
+    how = Counter()
+    for r in fsn_rows:
+        sn, eq = sn_norm(r.get("sn", "")), id_key(r.get("eq", ""))
+        sheet = mod_tags(r.get("bu", ""))
+        if sn and sn in eq_sn:
+            mod, src = eq_sn[sn], "pm_sn"
+        elif eq and eq in eq_id:
+            mod, src = eq_id[eq], "pm_equip"
+        elif sn and sn in fco_sn:
+            mod, src = fco_sn[sn], "fco_sn"
+        elif len(sheet) == 1 and next(iter(sheet)) in ("MR", "CT", "XR"):
+            mod, src = next(iter(sheet)), "sheet"
+        elif system_mod(r.get("sys", "")):
+            mod, src = system_mod(r.get("sys", "")), "system"
+        else:
+            mod, src = "기타", "none"
+        r["mod"] = mod if mod in ("MR", "CT", "XR") else "기타"
+        r["modsrc"] = src
+        how[src] += 1
+    counts = Counter(r["mod"] for r in fsn_rows)
+    return {"how": dict(how), "counts": {m: counts.get(m, 0) for m in MOD_ORDER},
+            "pmSheets": (equipment or {}).get("sheets", []), "conflicts": (equipment or {}).get("conflicts", 0)}
 
 
 def apply_fco_people(fsn_rows, fco_people: list) -> dict:
@@ -1252,7 +1363,7 @@ def apply_fco_people(fsn_rows, fco_people: list) -> dict:
         kind = "fco_sn"
         if not names:
             kind = "fco_name"
-            row_mods = mod_tags(r.get("bu", ""))
+            row_mods = row_mod_set(r)
             entries = []
             for key in (r.get("k"), hospital_key(r["h"]), hospital_key(r.get("hen", "")),
                         "L:" + loose_key(r["h"]) if loose_key(r["h"]) else ""):
@@ -1389,10 +1500,13 @@ def build_dashboard_data(fsn_info: dict, fco_infos: list, today: dt.date, people
         r["k"] = k or hospital_key(r["h"]) or ("fsn:" + r["h"])
 
     people_parse = (people_info or {}).get("parse") or {}
+    fco_people = [x for info in fco_infos for x in ((info.get("parse") or {}).get("people") or [])]
+    modality = assign_modality(fsn_rows, people_parse.get("equipment") or {}, fco_people)
+    for r in fco_rows:
+        r["mod"] = FCO_SRC_MOD.get(r["src"], "기타")
     people_apply = {"stats": {}, "unmatched": []}
     if people_parse.get("ok"):
         people_apply = apply_people(fsn_rows, fco_rows, None, people_parse)
-    fco_people = [x for info in fco_infos for x in ((info.get("parse") or {}).get("people") or [])]
     people_apply["stats"].update(apply_fco_people(fsn_rows, fco_people))
     people_apply["stats"]["total"] = len(fsn_rows)
     people_apply["stats"]["with_fse"] = sum(1 for r in fsn_rows if r.get("fse"))
@@ -1464,6 +1578,7 @@ def build_dashboard_data(fsn_info: dict, fco_infos: list, today: dt.date, people
             "rows": fco_rows,
         },
         "hospitals": hospitals,
+        "modality": modality,
         "people": {
             "available": bool(people_parse.get("ok")),
             "error": people_parse.get("error", "") if people_info else "담당자 파일 없음",

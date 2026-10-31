@@ -95,6 +95,17 @@ HTML 대시보드(`~/FSN_Dashboard/FSN_FCO_Dashboard.html`)를 만들고 Edge로
   [데이터 정보]에 FSE 명단 수, 제외한 칸과 이유, 명단 밖이라 뺀 이름(상위 20) 표시. FCO 파싱을 담당자 파일보다 먼저 함(명단에 FCO 이름 추가).
 - **다음 할 일: 실행 후 담당자 수와 "명단에 없어 뺀 이름" 확인. FSE 탭이 명단이 아니면(비율 0% 등) 명단 기준을 다시 정해야 함.**
 
+### 장비 구분 MR · CT · XR (2026-10-31 사용자 요청)
+- 사용자: "PM Planning master file에서 MR, CT, XR쪽의 system 탭이 장비 탭" → 이 탭들을 장비 종류의 기준으로 씀.
+- `parse_people`: 시트 이름에 system/시스템/장비 + MR/CT/XR(`title_mods`)이 있고 S/N·장비 ID 칸이 있으면 `res["equipment"]`에 S/N/장비 ID → 종류 저장.
+  같은 탭의 담당자는 그 종류 담당으로 표시(헤더·모달리티 칸에 표시가 없을 때 시트 이름 사용).
+- `assign_modality`: 고객안내문 행마다 `r["mod"]` ∈ MR/CT/XR/기타. 순서: PM 장비 탭 S/N → PM 장비 탭 장비 ID → FCO 파일 S/N →
+  한 종류 시트(MR/CT) → 장비명 제품 이름(`SYSTEM_KEYWORDS`: Ingenia→MR, Incisive→CT, Azurion→XR, EPIQ→기타…) → 기타. CT/AMI는 CT, IGT/DXR은 XR.
+- FCO 행 `r["mod"]` = 파일 종류. 담당자 고를 때(`row_mod_set`)도 이 종류를 씀.
+- 화면: 상단 "장비" 필터(모든 탭), 개요·고객안내문·FCO 탭에 장비별 카드(고정 순서 MR, CT, XR, 기타), 표에 장비 칸, [데이터 정보]에 "장비 구분" 결과
+  (장비별 건수, 어떻게 정했는지, PM 장비 탭 목록·대수). FCO 탭의 "소스" 선택칸은 "장비" 필터와 겹쳐 없앰.
+- 다음 확인: 사용자 실행 후 [데이터 정보] "장비 구분"에서 PM 장비 탭이 인식됐는지(탭 이름/대수), "못 정함 → 기타"가 얼마나 되는지.
+
 ## 자동 다운로드 (EdgeDownloader) — 회사 PC에서 동작 확인 완료
 - Edge(Windows 계정 SSO) + Selenium. 프로필 `~/FSN_Dashboard/browser_profile`(잠겨 있으면 `browser_profile_2`로 재시도), 다운로드 폴더 `~/FSN_Dashboard/downloads`.
 - **속도(2026-10-31)**: `fetch_many` — 사이트(host)마다 파일 화면을 한 번만 열고(고객안내문 docs.philips.com 1번, FCO 3개+PM share.philips.com 1번),

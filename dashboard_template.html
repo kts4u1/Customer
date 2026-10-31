@@ -298,6 +298,7 @@ td button.hlink:hover { color: var(--accent); text-decoration: underline; }
 <div class="sticky">
   <div class="wrap filters">
     <label class="f"><span>담당자 (FSE · 영업)</span><select id="fPerson"></select></label>
+    <label class="f"><span>장비</span><select id="fMod"></select></label>
     <label class="f" id="fBuWrap"><span>BU</span><select id="fBu"></select></label>
     <label class="f grow"><span>검색</span><input id="fQ" type="search" placeholder="병원명 · S/N · FSN · C&amp;R · FCO 번호" autocomplete="off"></label>
     <button class="btn" id="fReset" type="button">필터 초기화</button>
@@ -362,7 +363,7 @@ const store = {
 };
 const S = {
   tab: store.get('tab', 'overview'),
-  person: '', bu: '', q: '',
+  person: '', bu: '', mod: '', q: '',
   cr: '', method: '', fsnId: '', fsnView: 'hosp', fsnOnly: 'todo',
   src: '', band: '', rel: false,
   hsel: null, hsort: 'prio', hOnly: '',
@@ -458,6 +459,9 @@ function buMatchesSrc(bu, src) {
   const al = BU_ALIAS[src] || [src];
   return al.indexOf(String(bu).toUpperCase()) >= 0;
 }
+const MOD_ORDER = ['MR', 'CT', 'XR', '기타'];
+const modOK = r => !S.mod || r.mod === S.mod;
+const modLabel = r => r.mod || '기타';
 function buOK(r, kind) {
   if (!SHOW_BU || !S.bu) return true;
   if (kind === 'fsn') return r.bu === S.bu;
@@ -472,8 +476,8 @@ function qOK(r, kind) {
   fields.push(hname(r.k));
   return fields.some(v => v && String(v).toLowerCase().indexOf(q) >= 0);
 }
-const fsnBase = (useQ = true) => FSN.filter(r => personOK(r, 'fsn') && buOK(r, 'fsn') && (!useQ || qOK(r, 'fsn')));
-const fcoBase = (useQ = true) => FCO.filter(r => personOK(r, 'fco') && buOK(r, 'fco') && (!useQ || qOK(r, 'fco')));
+const fsnBase = (useQ = true) => FSN.filter(r => personOK(r, 'fsn') && buOK(r, 'fsn') && modOK(r) && (!useQ || qOK(r, 'fsn')));
+const fcoBase = (useQ = true) => FCO.filter(r => personOK(r, 'fco') && buOK(r, 'fco') && modOK(r) && (!useQ || qOK(r, 'fco')));
 const fsnTabRows = () => fsnBase().filter(r =>
   (!S.cr || crLabel(r) === S.cr) && (!S.method || methodLabel(r) === S.method) && (!S.fsnId || fsnLabel(r) === S.fsnId));
 const fcoTabRows = () => fcoBase().filter(r => (!S.src || r.src === S.src) && (!S.band || r.b === S.band) && (!S.rel || r.rel));
@@ -518,7 +522,7 @@ function hospAgg(fsnRows, fcoRows) {
     if (!m.has(k)) {
       const hh = H[k] || {};
       m.set(k, { k, name: hh.name || k, pp: hh.pp || [], fsnTotal: 0, fsnTodo: 0, r: 0, o: 0, g: 0, n: 0,
-        bus: new Set(), crs: new Set(), methods: new Set(), fsns: new Set(), fse: new Set(), sales: new Set() });
+        bus: new Set(), mods: new Set(), crs: new Set(), methods: new Set(), fsns: new Set(), fse: new Set(), sales: new Set() });
     }
     return m.get(k);
   };
@@ -531,6 +535,7 @@ function hospAgg(fsnRows, fcoRows) {
       if (r.cr) a.crs.add(r.cr);
     }
     if (r.bu) a.bus.add(r.bu);
+    if (r.mod) a.mods.add(r.mod);
     if (r.m) a.methods.add(r.m);
     r._fse.forEach(x => a.fse.add(x));
     r._sales.forEach(x => a.sales.add(x));
@@ -573,7 +578,9 @@ function rowActivate(el, fn) {
 function completionList(items, o) {
   o = o || {};
   const limit = o.limit || 8;
-  items = items.slice().sort((a, b) => (b.todo - a.todo) || ((b.done + b.todo) - (a.done + a.todo)) || String(a.label).localeCompare(String(b.label), 'ko'));
+  items = o.fixed
+    ? items.slice().sort((a, b) => (o.fixed.indexOf(a.key) < 0 ? 99 : o.fixed.indexOf(a.key)) - (o.fixed.indexOf(b.key) < 0 ? 99 : o.fixed.indexOf(b.key)))
+    : items.slice().sort((a, b) => (b.todo - a.todo) || ((b.done + b.todo) - (a.done + a.todo)) || String(a.label).localeCompare(String(b.label), 'ko'));
   const shown = S.expand[o.id] ? items : items.slice(0, limit);
   if (!items.length) return h('div', { class: 'empty', text: '표시할 데이터가 없습니다.' });
   const list = h('div', { class: 'bars' }, shown.map(it => {
@@ -599,7 +606,9 @@ function bandList(items, o) {
   o = o || {};
   const limit = o.limit || 10;
   const tot = it => it.r + it.o + it.g + it.n;
-  items = items.slice().sort((a, b) => (b.r - a.r) || (tot(b) - tot(a)) || String(a.label).localeCompare(String(b.label), 'ko'));
+  items = o.fixed
+    ? items.slice().sort((a, b) => (o.fixed.indexOf(a.key) < 0 ? 99 : o.fixed.indexOf(a.key)) - (o.fixed.indexOf(b.key) < 0 ? 99 : o.fixed.indexOf(b.key)))
+    : items.slice().sort((a, b) => (b.r - a.r) || (tot(b) - tot(a)) || String(a.label).localeCompare(String(b.label), 'ko'));
   if (!items.length) return h('div', { class: 'empty', text: '표시할 데이터가 없습니다.' });
   const max = Math.max.apply(null, items.map(tot));
   const shown = S.expand[o.id] ? items : items.slice(0, limit);
@@ -725,20 +734,18 @@ function viewOverview() {
 
   const cards = h('div', { class: 'cards' });
   if (FSN_OK) {
-    const useBu = SHOW_BU && FSN_HAS.bu;
-    const items = useBu ? groupFsn(fr, buLabel) : groupFsn(fr, crLabel);
     cards.append(h('div', { class: 'card' },
-      h('h3', { text: useBu ? 'BU별 고객안내문 전달' : 'C&R별 고객안내문 전달' }),
-      h('p', { class: 'sub', text: '막대를 누르면 고객안내문 탭에서 자세히 봅니다.' }),
+      h('h3', { text: '장비별 고객안내문 전달 (MR · CT · XR)' }),
+      h('p', { class: 'sub', text: '막대를 누르면 그 장비만 보기' }),
       FSN_LEGEND(),
-      completionList(items, { id: 'ov-fsn', limit: 8, onClick: key => useBu ? goFsn({ bu: key === '(BU 없음)' ? '' : key }) : goFsn({ cr: key }) })));
+      completionList(groupFsn(fr, modLabel), { id: 'ov-fsn', fixed: MOD_ORDER, onClick: key => { S.mod = S.mod === key ? '' : key; render(); } })));
   } else cards.append(unavailable('fsn'));
   if (FCO_OK) {
     cards.append(h('div', { class: 'card' },
-      h('h3', { text: '소스별 남은 FCO' }),
+      h('h3', { text: '장비별 남은 FCO (MR · CT · XR)' }),
       h('p', { class: 'sub', text: 'Closed 제외 · 마감일(Due Date) 기준 구간' }),
       BAND_LEGEND(),
-      bandList(groupBand(cr, r => r.src), { id: 'ov-fco', onClick: key => goFco({ src: key }) })));
+      bandList(groupBand(cr, modLabel), { id: 'ov-fco', fixed: MOD_ORDER, onClick: key => { S.mod = S.mod === key ? '' : key; render(); } })));
   } else cards.append(unavailable('fco'));
   out.push(cards);
 
@@ -783,6 +790,7 @@ function viewFsn() {
 
   const cards = h('div', { class: 'cards' });
   const card = (title, subText, content) => h('div', { class: 'card' }, h('h3', { text: title }), h('p', { class: 'sub', text: subText }), FSN_LEGEND(), content);
+  cards.append(card('장비별 (MR · CT · XR)', 'PM Planning 장비 탭 기준 · 누르면 장비 필터 적용', completionList(groupFsn(rows, modLabel), { id: 'fsn-mod', fixed: MOD_ORDER, active: S.mod, onClick: k => { S.mod = S.mod === k ? '' : k; render(); } })));
   if (SHOW_BU && FSN_HAS.bu) cards.append(card('BU별', '누르면 BU 필터 적용', completionList(groupFsn(rows, buLabel), { id: 'fsn-bu', active: S.bu, onClick: k => { S.bu = S.bu === k ? '' : (k === '(BU 없음)' ? '' : k); render(); } })));
   if (FSN_HAS.cr) cards.append(card('C&R별', '미전달이 많은 순', completionList(groupFsn(rows, crLabel), { id: 'fsn-cr', active: S.cr, onClick: k => { S.cr = S.cr === k ? '' : k; render(); } })));
   if (SHOW_METHOD) cards.append(card('전달방법별', '등기 · 직접전달 · 이메일', completionList(groupFsn(rows, methodLabel), { id: 'fsn-m', active: S.method, onClick: k => { S.method = S.method === k ? '' : k; render(); } })));
@@ -816,6 +824,7 @@ function viewFsn() {
       countText: n => '병원 ' + fmt(n) + '곳',
       columns: [
         { key: 'name', label: '병원', get: a => a.name, cell: a => hospLink(a.k, a.name) },
+        { key: 'mod', label: S.fsnOnly === 'todo' ? '미전달 장비' : '장비', get: a => MOD_ORDER.filter(m => a.mods.has(m)).join(', '), nowrap: true },
         { key: 'bu', label: S.fsnOnly === 'todo' ? '미전달 BU' : 'BU', get: a => Array.from(a.bus).join(', '), when: () => SHOW_BU && FSN_HAS.bu },
         { key: 'todo', label: '미전달', num: true, get: a => a.allTodo, cell: a => a.allTodo ? h('span', { class: 'bad', text: fmt(a.allTodo) }) : '0' },
         { key: 'tot', label: '대상', num: true, get: a => a.allTotal },
@@ -839,6 +848,7 @@ function fsnRowColumns(withHosp) {
   return [
     { key: 'h', label: '병원', get: r => r.h, cell: r => hospLink(r.k, r.h), when: () => withHosp },
     { key: 'site', label: 'Site', get: r => r.site, when: () => FSN_HAS.site },
+    { key: 'mod', label: '장비', get: r => r.mod, sortVal: r => MOD_ORDER.indexOf(r.mod), nowrap: true },
     { key: 'bu', label: 'BU', get: r => r.bu, nowrap: true, when: () => SHOW_BU && FSN_HAS.bu },
     { key: 'cr', label: 'C&R', get: r => r.cr, when: () => FSN_HAS.cr },
     { key: 'fsn', label: 'FSN', get: r => r.fsn, when: () => FSN_HAS.fsn },
@@ -865,7 +875,6 @@ function viewFco() {
   const bc = bandCounts(base.filter(r => (!S.src || r.src === S.src) && (!S.rel || r.rel)));
   const out = [];
   const sub = h('div', { class: 'subfilters' },
-    selectBox('소스', S.src, uniqSorted(FCO.map(r => r.src)), v => { S.src = v; render(); }),
     selectBox('마감 구간', S.band, BAND_KEYS.filter(k => k !== 'n' || HAS_BAND_N).map(k => [k, BAND[k].label]), v => { S.band = v; render(); }),
     h('div', { class: 'f' }, h('span', { text: '고객안내문' }),
       h('label', { class: 'check' },
@@ -875,8 +884,8 @@ function viewFco() {
     kpi({ hero: true, label: '남은 FCO (Closed 제외)', value: fmt(bc.total) + '건', sub: '병원 ' + fmt(new Set(base.filter(r => (!S.src || r.src === S.src) && (!S.rel || r.rel)).map(r => r.k)).size) + '곳', onClick: () => { S.band = ''; render(); } }),
     BAND_KEYS.filter(k => k !== 'n' || HAS_BAND_N).map(k => kpi({ label: BAND[k].label, value: fmt(bc[k]) + '건', swatch: BAND[k].color, active: S.band === k, onClick: () => { S.band = S.band === k ? '' : k; render(); } }))));
   const cards = h('div', { class: 'cards' },
-    h('div', { class: 'card' }, h('h3', { text: '소스별' }), h('p', { class: 'sub', text: '누르면 소스 필터 적용' }), BAND_LEGEND(),
-      bandList(groupBand(rows, r => r.src), { id: 'fco-src', active: S.src, onClick: k => { S.src = S.src === k ? '' : k; render(); } })),
+    h('div', { class: 'card' }, h('h3', { text: '장비별 (MR · CT · XR)' }), h('p', { class: 'sub', text: '누르면 장비 필터 적용' }), BAND_LEGEND(),
+      bandList(groupBand(rows, modLabel), { id: 'fco-mod', fixed: MOD_ORDER, active: S.mod, onClick: k => { S.mod = S.mod === k ? '' : k; render(); } })),
     h('div', { class: 'card' }, h('h3', { text: 'FSE별' }), h('p', { class: 'sub', text: '6개월 미만이 많은 순 · 누르면 담당자 필터 적용' }), BAND_LEGEND(),
       bandList(groupBand(rows, r => r.pp.length ? r.pp : ['(미지정)']), { id: 'fco-fse', active: S.person, onClick: k => { if (k !== '(미지정)') { S.person = S.person === k ? '' : k; render(); } } })));
   out.push(cards);
@@ -890,7 +899,7 @@ function fcoColumns(withHosp) {
     { key: 'due', label: 'Due Date', get: r => r.due, nowrap: true },
     { key: 'dd', label: '남은 기간', num: true, get: r => ddayText(r.dd), sortVal: r => r.dd, cell: r => r.dd != null && r.dd < 0 ? h('span', { class: 'bad', text: ddayText(r.dd) + ' 지남' }) : ddayText(r.dd) },
     { key: 'b', label: '구간', get: r => BAND[r.b].label, sortVal: r => BAND_KEYS.indexOf(r.b), cell: bandCell, nowrap: true },
-    { key: 'src', label: '소스', get: r => r.src, nowrap: true },
+    { key: 'src', label: '장비', get: r => r.mod || r.src, sortVal: r => MOD_ORDER.indexOf(r.mod), nowrap: true },
     { key: 'h', label: '병원 (Account)', get: r => r.h, cell: r => hospLink(r.k, r.h), when: () => withHosp },
     { key: 'site', label: 'Site', get: r => r.site },
     { key: 't', label: 'FCO Title', get: r => r.t, clip: true },
@@ -1036,6 +1045,18 @@ function viewInfo() {
 
   // 담당자 파일 (PM Planning)
   const P = D.people || {};
+  const MD = D.modality || {};
+  if (MD.counts) {
+    const HOW_KO = { pm_sn: 'PM 장비 탭 · S/N으로', pm_equip: 'PM 장비 탭 · 장비 ID로', fco_sn: 'FCO 파일 · S/N으로', sheet: '고객안내문 시트 이름(MR/CT)으로', system: '장비명(제품 이름)으로', none: '못 정함 → 기타' };
+    out.push(h('div', { class: 'section-title', text: '장비 구분 (MR · CT · XR)' }));
+    out.push(h('div', { class: 'cards' },
+      h('div', { class: 'card' }, h('h3', { text: '장비별 건수' }), h('p', { class: 'sub', text: '고객안내문 행 기준' }),
+        simpleTable(['장비', '건수'], MOD_ORDER.map(m => [m, fmt(MD.counts[m] || 0)]))),
+      h('div', { class: 'card' }, h('h3', { text: '어떻게 정했는지' }), h('p', { class: 'sub', text: '위에서부터 먼저 맞는 방법으로 정함' }),
+        simpleTable(['방법', '건수'], Object.keys(HOW_KO).filter(k => (MD.how || {})[k]).map(k => [HOW_KO[k], fmt(MD.how[k])]))),
+      h('div', { class: 'card' }, h('h3', { text: 'PM Planning 장비 탭' }), h('p', { class: 'sub', text: (MD.conflicts ? '서로 다른 탭에 같은 S/N ' + fmt(MD.conflicts) + '건 (먼저 나온 탭 기준)' : '탭 이름의 MR/CT/XR로 구분') }),
+        (MD.pmSheets || []).length ? simpleTable(['시트', '장비', '대수'], MD.pmSheets.map(x => [x.name, x.mod, fmt(x.count)])) : h('div', { class: 'empty', text: '장비(system) 탭을 찾지 못했습니다.' }))));
+  }
   out.push(h('div', { class: 'section-title', text: '담당자 파일 (PM Planning)' }));
   if (!P.available) {
     out.push(h('div', { class: 'card' }, h('p', { class: 'sub', style: 'margin:0', text: (P.error || '담당자 파일 없음') + ' — 이 경우 담당자는 고객안내문/FCO 파일에 있는 이름만 씁니다.' })));
@@ -1090,6 +1111,10 @@ function renderFilters() {
   selP.value = S.person;
   let bus = uniqSorted(FSN.map(r => r.bu));
   if (!bus.length) bus = uniqSorted(FCO.map(r => r.src));
+  const selM = document.getElementById('fMod');
+  setKids(selM, h('option', { value: '', text: '전체 (MR · CT · XR)' }),
+    MOD_ORDER.filter(m => FSN.some(r => r.mod === m) || FCO.some(r => r.mod === m)).map(m => h('option', { value: m, text: m })));
+  selM.value = S.mod;
   document.getElementById('fBuWrap').hidden = !SHOW_BU;
   const selB = document.getElementById('fBu');
   setKids(selB, h('option', { value: '', text: '전체' }), bus.map(b => h('option', { value: b, text: b })));
@@ -1101,6 +1126,7 @@ function renderFilters() {
   const chip = (label, clear) => h('span', { class: 'chip' }, label, h('button', { type: 'button', 'aria-label': label + ' 해제', onclick: () => { clear(); render(); }, text: '×' }));
   if (S.person) chips.push(chip('담당자: ' + S.person, () => S.person = ''));
   if (S.bu) chips.push(chip('BU: ' + S.bu, () => S.bu = ''));
+  if (S.mod) chips.push(chip('장비: ' + S.mod, () => S.mod = ''));
   if (S.q) chips.push(chip('검색: ' + S.q, () => S.q = ''));
   if (S.tab === 'fsn') {
     if (S.fsnId) chips.push(chip('FSN: ' + S.fsnId, () => S.fsnId = ''));
@@ -1172,13 +1198,14 @@ document.getElementById('themeBtn').addEventListener('click', () => {
 /* global filter events */
 document.getElementById('fPerson').addEventListener('change', e => { S.person = e.target.value; render(); });
 document.getElementById('fBu').addEventListener('change', e => { S.bu = e.target.value; render(); });
+document.getElementById('fMod').addEventListener('change', e => { S.mod = e.target.value; render(); });
 let qTimer = null;
 document.getElementById('fQ').addEventListener('input', e => {
   clearTimeout(qTimer);
   qTimer = setTimeout(() => { S.q = e.target.value.trim(); render(); }, 200);
 });
 document.getElementById('fReset').addEventListener('click', () => {
-  Object.assign(S, { person: '', bu: '', q: '', cr: '', method: '', fsnId: '', src: '', band: '', rel: false, hOnly: '' });
+  Object.assign(S, { person: '', bu: '', mod: '', q: '', cr: '', method: '', fsnId: '', src: '', band: '', rel: false, hOnly: '' });
   render();
 });
 
