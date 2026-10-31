@@ -54,7 +54,11 @@ HTML 대시보드(`~/FSN_Dashboard/FSN_FCO_Dashboard.html`)를 만들고 Edge로
 - 시트: IB_raw data, IGT DXR US HPM, MR, CT, (삭제예정)SMAX자료, IGT FCO release date, 자동연동 설정, (삭제예정)매칭 QA 점검, C&R, FCO 매칭, Closed, …
   → BU 컬럼이 없고 시트 이름이 모달리티 묶음. 같은 구조의 시트(MR/CT/IGT…)를 합쳐 읽음. 이름에 "삭제"/"closed"가 들어간 시트는 제외(`SKIP_SHEET_WORDS`, config `skip_sheets`).
 - MR 시트 헤더(1행, 일부): C&R#, 장비 ID, 장비코드(6NC/12NC), 장비명, 일련번호(S/N), 고객코드(향후 업데이트), 영문병원명(업데이트예정), 국문병원명, …, 공문(방법 or N), 대리점명(or N), 지역, 비고, 최종증빙 확인, 수신확인서 (Y/N/NA), (최초…일)
-- **병원 이름 = `국문병원명` → `고객명(국문)` → `영문병원명`** 순으로 처음 채워진 값(사용자 지정). "-", "N", "0" 같은 값은 빈칸 취급(`row_hospital`, `PLACEHOLDER`).
+- **병원 이름 = 국문 우선**: 국문병원명 → 고객명(국문)/한글고객명 → 고객주소 (설치장소) 중 **한글이 들어간 첫 값**, 한글이 하나도 없을 때만 영문(`row_hospital`).
+  2026-10-31 사용자 캡처: IGT DXR US HPM 시트는 '고객명(국문)'에 영문이, '고객주소 (설치장소)'에 진짜 국문 병원명이 있음 → `hospital_site` 필드 추가.
+  영문 이름은 `hen`(FCO Account 연결용, `row_hospital_en`). "-", "N", "0", "폐기", "UNKN/SCRP"는 빈칸 취급(`PLACEHOLDER`).
+  병원 표시 이름도 같은 병원의 국문 이름이 있으면 국문으로(FCO만 있는 병원의 영문 Account 대신).
+- IGT 시트의 'Modality' 칸은 이메일/N 같은 엉뚱한 값 → BU로 읽지 않음(별칭에서 Modality 제거). 장비 구분은 시트 이름(`r["sheet"]`) 사용.
 - **전달 완료 = `최종증빙 확인` 칸에 값이 있음** (사용자 확인). 비어 있으면 미전달(발송일이 있어도 미전달).
   N/X/0/-/미… 는 미전달, NA·N/A·해당없음은 집계 제외. 코드: `FSN_FIELDS`의 status 별칭 맨 앞 + `parse_fsn`의 `evidence` 처리.
 

@@ -247,8 +247,12 @@ FSN_FIELDS = [
                  "유형", "type", "id", "수량", "개수", "구분", "종별", "등급", "영문", "english"])),
     # 병원명 칸이 비었을 때 쓸 두 번째 국문 이름 (예: 국문병원명이 비면 고객명(국문))
     ("hospital2", _rule(
-        exact=["고객명(국문)", "국문고객명", "고객명 국문", "국문병원명", "병원명(국문)", "고객명", "고객사명"],
-        contains=["국문"], exclude=["영문", "코드", "주소"])),
+        exact=["한글고객명", "한글 고객명", "고객명(국문)", "국문고객명", "고객명 국문", "국문병원명", "병원명(국문)",
+               "고객명", "고객사명"],
+        contains=["국문", "한글고객"], exclude=["영문", "코드", "주소"])),
+    # IGT DXR US HPM 시트: '고객명(국문)'에 영문이 들어 있고 '고객주소 (설치장소)'에 진짜 국문 병원명이 있음 (2026-10-31 사용자 확인)
+    ("hospital_site", _rule(exact=["고객주소 (설치장소)", "고객주소(설치장소)", "설치장소", "설치 장소", "설치병원"],
+                            contains=["설치장소"])),
     # 국문 이름이 모두 비었을 때 마지막 대안
     ("hospital_en", _rule(
         exact=["영문병원명", "영문 병원명", "병원명(영문)", "고객명(영문)", "영문고객명", "Account Name",
@@ -279,9 +283,8 @@ FSN_FIELDS = [
         exact=["C&R", "CR", "C&R No", "C&R 번호", "CR No", "C&R 구분", "C&R ID", "C&R Number", "C&R명"],
         contains=["c&r"])),
     ("bu", _rule(
-        exact=["BU", "Business Unit", "사업부", "BG", "Business Group", "Modality", "모달리티", "제품군", "BU 구분",
-               "분야"],
-        contains=["bu구분", "사업부", "modality", "모달리티", "businessunit"])),
+        exact=["BU", "Business Unit", "사업부", "BG", "Business Group", "제품군", "BU 구분", "분야"],
+        contains=["bu구분", "사업부", "businessunit"])),
     ("fsn", _rule(
         exact=["FSN", "FSN No", "FSN 번호", "FSN Number", "FSN ID", "FSN명", "FSN 코드", "안내문 번호",
                "고객안내문 번호", "고객안내문", "고객안내문명", "안내문", "안내문명", "FCA", "FCA No",
@@ -583,20 +586,37 @@ def _truthy_mark(v) -> bool:
     return bool(s) and s not in TODO_EXACT and not s.startswith("미")
 
 
-HOSP_FIELDS = ("hospital", "hospital2", "hospital_en")
-PLACEHOLDER = {"", "-", "--", "n", "na", "x", "0", "?", "없음", "미정", "tbd"}
+HOSP_FIELDS = ("hospital", "hospital2", "hospital_site", "hospital_en")
+PLACEHOLDER = {"", "-", "--", "n", "na", "x", "0", "?", "없음", "미정", "tbd", "폐기", "unknscrp", "unknown", "unkn"}
+HANGUL_RE = re.compile(r"[가-힣]")
 # 이 단어가 들어간 시트는 읽지 않음 (config.json "skip_sheets"로 바꿀 수 있음)
 SKIP_SHEET_WORDS = ["삭제", "closed"]
 
 
-def row_hospital(row, m) -> str:
-    """국문병원명 → 고객명(국문) → 영문병원명 순으로 처음 채워진 값"""
+def _hosp_values(row, m):
     for f in HOSP_FIELDS:
         c = m.get(f)
         if c is None or c >= len(row):
             continue
         v = clean_text(row[c])
         if norm_header(v) not in PLACEHOLDER:
+            yield v
+
+
+def row_hospital(row, m) -> str:
+    """병원 이름은 국문 우선: 국문병원명 → 고객명(국문) → 한글고객명 → 고객주소(설치장소) 중 한글이 들어간 첫 값.
+    한글 이름이 하나도 없을 때만 영문 이름."""
+    vals = list(_hosp_values(row, m))
+    for v in vals:
+        if HANGUL_RE.search(v):
+            return v
+    return vals[0] if vals else ""
+
+
+def row_hospital_en(row, m) -> str:
+    """영문 병원명 (FCO Account가 영문일 때 연결용): 한글이 없는 첫 값"""
+    for v in _hosp_values(row, m):
+        if not HANGUL_RE.search(v):
             return v
     return ""
 
@@ -747,8 +767,7 @@ def parse_fsn(path: Path, overrides=None, skip_sheets=None) -> dict:
                 "k": "", "h": hosp,
                 "site": clean_text(g(row, "site")),
                 "bu": norm_bu(g(row, "bu")) or (ws.title.strip() if bu_from_sheet else ""),
-                "hen": clean_text(g(row, "hospital_en")) if row_hospital(row, m) != clean_text(
-                    g(row, "hospital_en")) else "",
+                "hen": row_hospital_en(row, m) if row_hospital_en(row, m) != hosp else "",
                 "cr": clean_text(g(row, "cr")),
                 "fsn": fsn,
                 "ft": clean_text(g(row, "fsn_title")),
@@ -1302,7 +1321,7 @@ def row_mod_set(r) -> set:
         return {m}
     if m == "기타":
         return {"기타"}
-    return mod_tags(r.get("bu", ""))
+    return mod_tags(r.get("sheet", "")) or mod_tags(r.get("bu", ""))
 
 
 def assign_modality(fsn_rows, equipment: dict, fco_people: list) -> dict:
@@ -1317,7 +1336,7 @@ def assign_modality(fsn_rows, equipment: dict, fco_people: list) -> dict:
     how = Counter()
     for r in fsn_rows:
         sn, eq = sn_norm(r.get("sn", "")), id_key(r.get("eq", ""))
-        sheet = mod_tags(r.get("bu", ""))
+        sheet = mod_tags(r.get("sheet", "")) or mod_tags(r.get("bu", ""))
         if sn and sn in eq_sn:
             mod, src = eq_sn[sn], "pm_sn"
         elif eq and eq in eq_id:
@@ -1534,6 +1553,13 @@ def build_dashboard_data(fsn_info: dict, fco_infos: list, today: dt.date, people
         for p in pp:
             if p not in h["pp"]:
                 h["pp"].append(p)
+
+    # 병원 표시 이름은 국문 우선 (FCO Account가 영문이어도 같은 병원의 국문 이름이 있으면 그걸 씀)
+    for h in hospitals.values():
+        if not HANGUL_RE.search(h["name"] or ""):
+            ko = next((n for n in h["names"] if HANGUL_RE.search(n)), None)
+            if ko:
+                h["name"] = ko
 
     # 담당자 파일의 병원 단위 이름도 병원 담당자 목록에 추가 (영업 담당이 FCO를 볼 때 등)
     if people_parse.get("ok"):

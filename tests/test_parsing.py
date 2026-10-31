@@ -350,6 +350,43 @@ def test_modality_from_pm_system_tabs():
         assert rows[0]["fse"] == "박지훈" and rows[1]["fse"] == "이서연", (rows[0], rows[1])
 
 
+def test_igt_sheet_korean_names():
+    """IGT DXR US HPM 시트(2026-10-31 캡처): '고객명(국문)'은 영문, '고객주소 (설치장소)'가 국문 병원명"""
+    import openpyxl
+    head = ["C&R#", "장비 IB", "장비코드", "장비명", "일련번호(S/N)", "C&R Title", "Modality", "IB", "Customer No.",
+            "Region", "한글고객명", "고객명(영문) - 삭제", "고객명(국문)", "고객주소 (설치장소)", "우편번호", "최종증빙 확인"]
+    with tempfile.TemporaryDirectory() as d:
+        path = Path(d) / "fsn.xlsx"
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "IGT DXR US HPM"
+        ws.append(head)
+        ws.append(["2022-IGT-BST-007", "77073772", "722078", "Azurion 7 M12", "367", "oFinger", "N", "N", "N", "CC", "0",
+                   "0", "Daejoen St. Mary Hosp.", "가톨릭대학교 대전성모병원", "34943", "O"])
+        ws.append(["2022-IGT-BST-007", "88571195", "722078", "Azurion 7 M12", "980", "oFinger",
+                   "minyoung0305@yuhs.ac", "N", "N", "Central", "0", "0", "Gangnam Severance Hospital", "강남세브란스병원",
+                   "06273", ""])
+        ws.append(["2022-IGT-BST-007", "67938926", "722058", "Allura Xper FD20", "115", "oFinger", "0", "0", "0",
+                   "Central 2", "0", "0", "Galen Foundation(PMC Park)", "PMC박병원", "17788", ""])
+        ws.append(["2022-IGT-BST-007", "39571615", "722003", "Allura Xper FD20", "1037", "oFinger", "NA", "NA", "NA",
+                   "NA", "0", "0", "-", "UNKN/SCRP", "NA", ""])
+        m = wb.create_sheet("MR")
+        m.append(["C&R#", "장비 ID", "장비명", "일련번호(S/N)", "영문병원명(업데이트예정)", "국문병원명", "최종증빙 확인"])
+        m.append(["2026-PD-MR-004", "98162875", "Ingenia", "62030", "DONGKOOK UNIV", "동국대학교병원", ""])
+        m.append(["2026-PD-MR-004", "98747245", "Ingenia", "62039", "-", "", ""])
+        wb.save(path)
+        r = main.parse_fsn(path)
+        assert r["ok"], r["error"]
+        igt = [x for x in r["rows"] if x["sheet"] == "IGT DXR US HPM"]
+        assert [x["h"] for x in igt] == ["가톨릭대학교 대전성모병원", "강남세브란스병원", "PMC박병원"], [x["h"] for x in igt]
+        assert igt[0]["hen"] == "Daejoen St. Mary Hosp.", igt[0]
+        assert all("@" not in x["bu"] for x in r["rows"]), [x["bu"] for x in r["rows"]]   # Modality(이메일)는 BU 아님
+        mr = [x for x in r["rows"] if x["sheet"] == "MR"]
+        assert [x["h"] for x in mr] == ["동국대학교병원"], mr     # 병원명 없는 행은 건너뜀
+        res = main.assign_modality(r["rows"], {}, [])
+        assert [x["mod"] for x in igt] == ["XR", "XR", "XR"] and mr[0]["mod"] == "MR", [x["mod"] for x in r["rows"]]
+
+
 def test_download_urls():
     fco = main.FCO_SOURCES["MR"]["url"]
     assert main.add_download_param(fco) == (
