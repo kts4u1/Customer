@@ -72,14 +72,14 @@ HTML 대시보드(`~/FSN_Dashboard/FSN_FCO_Dashboard.html`)를 만들고 Edge로
 - URL 3개(`FCO_SOURCES`): `share.philips.com/:x:/r/sites/KRHSFCOstatus/_layouts/15/Doc.aspx?sourcedoc={GUID}&file=…`
   → `add_download_param`이 `…/sites/KRHSFCOstatus/_layouts/15/download.aspx?UniqueId=GUID`로 바꿔서 받음(Doc.aspx에 download=1은 안 됨).
 - `Status`가 Closed인 행 제외. 구간: Due Date가 오늘+6개월 미만 빨강, +1년 미만 노랑, 그 외 녹색(기존 FCO 프로그램과 같은 기준).
-- 받기 실패 시: 오늘 받은 파일 → 기존 FCO 프로그램 캐시 `~/FCO_Action_Plan/…xlsx`(읽기만) → 이전 파일 순으로 사용.
+- 받기 실패 시: 이전에 받은 파일 → 기존 FCO 프로그램 캐시 `~/FCO_Action_Plan/…xlsx`(읽기만) 중 최신 파일 사용.
 - 병원 연결: 병원명 정규화(`hospital_key`: 공백·(재)·의료법인 등 제거) + 장비 S/N이 같으면 같은 병원 + FCO Account가 영문이면 영문병원명으로도 연결.
 
-### 담당자 파일 (PM Planning) — 2026-10-30 추가, 실제 구조 미확인
+### 담당자 파일 (PM Planning) — 2026-10-30 추가 (실제 파일은 못 봄, 사용자 캡처·결과로 맞춰 가는 중)
 - 사용자 요청: "Hospital table"과 "FSE" 탭에 담당자 이름이 있으니 이걸로 고객안내문 대시보드의 담당자를 채울 것.
 - URL(`PM_SOURCE`): `share.philips.com/:x:/r/sites/HS_CS_RPTeam/_layouts/15/Doc.aspx?sourcedoc={1BF6D0D9-2A63-41B5-B38A-D8E52C403F5E}&file=★MASTER★ 2025 CT MR XR PM Planning.xlsx`
   → FCO와 같이 download.aspx?UniqueId=…로 받음. 캐시 `~/FSN_Dashboard/data/PM_Planning_master.xlsx`. config `pm_url`.
-- 파서 `parse_people` (read_only로 이름에 hospital/병원/fse/담당이 들어간 시트만 읽음):
+- 파서 `parse_people` (read_only. 이름에 hospital/병원/fse/담당이 들어간 시트 + 앞 30행에 S/N·장비 ID 칸이 있는 장비 시트를 읽음):
   연결 칸(`PEOPLE_KEYS`: 병원명 국문/영문, S/N, 장비 ID, 고객코드, 모달리티, 지역) + 담당자 칸(헤더에 FSE/담당/엔지니어/Sales/영업/이름…,
   또는 헤더가 "MR"/"CT"/"XR"뿐이고 값이 사람 이름처럼 보이는 칸). 헤더의 MR/CT/XR → 그 모달리티 담당. Sales/영업 → 영업.
   FSE 시트(한글 이름 + 영문명/사번)는 별칭표로 써서 영문 이름을 한글 이름으로 바꿈.
@@ -155,14 +155,16 @@ HTML 대시보드(`~/FSN_Dashboard/FSN_FCO_Dashboard.html`)를 만들고 Edge로
 → PyInstaller로 `dist\FSN_Dashboard.exe`를 만든 뒤 `dist\고객안내문.exe`로 복사(배치 파일에 한글을 쓰면 깨질 수 있어서 파이썬에서 처리).
 `dashboard_template.html`, `FSN.ico`는 `--add-data`로 exe 안에 포함됩니다. `build.bat`은 CRLF, ASCII만.
 
-## 현재 상태 / 열린 항목
-- 회사 PC 확인 완료(2026-10-29): Windows exe 빌드, Edge 자동 받기(고객안내문 + FCO 3개).
-- 검증(Claude 환경): 샘플 파싱(일반 표, 두 줄 헤더+병합+방법 칸 분리, 시트별 FSN, 실제 파일과 비슷한 구조), 대시보드 5개 탭(데스크톱/모바일/다크), 필터·클릭·CSV, Tkinter 진행 창, 리눅스 PyInstaller 빌드.
+## 현재 상태 / 열린 항목 (2026-10-31 기준)
+- 회사 PC 확인 완료: Windows exe 빌드, Edge 자동 받기(고객안내문 + FCO 3개 + PM Planning), 속도 개선 후 "속도는 이제 됐다"(사용자).
+- 최근 수정 순서(10-31): 매번 새로 받기·동시 받기·빠른 읽기 → "list index out of range" 수정 → MR/CT/XR 장비 구분(PM system 탭)
+  → IGT 시트 국문 병원명(고객주소 설치장소) → 짧은 S/N 겹침으로 엉뚱한 FSE가 붙던 문제 수정 + "담당자 근거" 칸.
+- 테스트: `python tests/test_parsing.py` (17개, 모두 통과). 사용자 캡처로 확인된 구조(IGT 시트, 짧은 S/N 겹침 등)는 테스트로 재현해 둠.
 - 열린 항목:
+  - 최신 버전 실행 결과 확인: 강릉동인병원 등 담당자가 맞는지("담당자 근거" 칸), [데이터 정보] "장비 구분"에서 PM system 탭 3개(MR/CT/XR) 인식·대수,
+    "못 정함 → 기타" 비율, 담당자 파일 "FSE 명단에 없어 뺀 이름".
   - BU별 화면: 사용자에게 BU별 지역 목록을 받으면 '지역' 컬럼 → BU 매핑 후 `SHOW_BU = true`.
   - 전달방법별 화면: 등기/직접전달/이메일 정보가 확정되면 `SHOW_METHOD = true`(어느 컬럼인지 확인 필요).
-  - 실제 파일 [데이터 정보] 탭으로 컬럼 매핑·판정 값 재확인.
-  - 담당자 파일(PM Planning) 실제 칸 구조 확인 후 `PEOPLE_KEYS`/담당자 칸 규칙 조정.
 - 부가 산출물: 발표용 5장 슬라이드(claude.ai 아티팩트 "고객안내문 · FCO 통합 Dashboard 소개" https://claude.ai/artifact/HTUvLJhYF14XQjUuVaRzZU). 5장 대시보드 캡처는 샘플 데이터 화면.
 
 ## 시작 방법
